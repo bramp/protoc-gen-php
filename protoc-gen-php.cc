@@ -18,8 +18,14 @@ using namespace google::protobuf::compiler;
 class PHPCodeGenerator : public CodeGenerator {
 	private:
 
-		void PrintMessage(io::Printer &printer, const Descriptor & message) const;
-		void PrintMessages(io::Printer &printer, const FileDescriptor* file) const;
+		void PrintMessage   (io::Printer &printer, const Descriptor & message) const;
+		void PrintMessages  (io::Printer &printer, const FileDescriptor & file) const;
+
+		void PrintEnum      (io::Printer &printer, const EnumDescriptor & e) const;
+		void PrintEnums     (io::Printer &printer, const FileDescriptor & file) const;
+
+		void PrintService   (io::Printer &printer, const ServiceDescriptor & service) const;
+		void PrintServices  (io::Printer &printer, const FileDescriptor & file) const;
 
 	public:
 
@@ -146,9 +152,22 @@ string ClassName(const ServiceDescriptor & descriptor) {
   return ToJavaName(descriptor.full_name(), *descriptor.file());
 }
 
+string LowerString(const string & s) {
+  string newS (s);
+  LowerString(&newS);
+  return newS;
+}
+
+string UpperString(const string & s) {
+  string newS (s);
+  UpperString(&newS);
+  return newS;
+}
+
+
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
-		printer.Print("class $name$ {\n", "name", message.name());
+		printer.Print("// Message $name$\nclass $name$ {\n", "name", message.name());
 		printer.Indent();
 
 		// Print nested messages
@@ -157,6 +176,11 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			PrintMessage(printer, *message.nested_type(i));
 	        }
 
+		// Print nested enum
+		for (int i = 0; i < message.enum_type_count(); ++i) {
+			PrintEnum(printer, *message.enum_type(i) );
+		}
+
 		// Print fields
                 for (int i = 0; i < message.field_count(); ++i) {
                         printer.Print("\n");
@@ -164,7 +188,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			const FieldDescriptor &field ( *message.field(i) );
 
 			map<string, string> variables;
-			variables["name"]             = UnderscoresToCamelCase(field);
+			variables["name"]             = "$" + UnderscoresToCamelCase(field);
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
 			variables["number"]           = SimpleItoa(field.number());
 			//variables["type"]             = ClassName(*field.message_type());
@@ -190,15 +214,48 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			"full_name", message.full_name());
 
 		printer.Outdent();
+		printer.Print("}\n\n");
+}
+
+void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e) const {
+
+		printer.Print("// Enum $name$\nclass $name$ {\n", "name", e.name());
+		printer.Indent();
+
+		// Print fields
+                for (int j = 0; j < e.value_count(); ++j) {
+			const EnumValueDescriptor &value ( *e.value(j) );
+
+			map<string, string> variables;
+			variables["name"]   = UpperString(value.name());
+			variables["number"] = SimpleItoa(value.number());
+
+			printer.Print(variables,
+				"const $name$ = $number$;\n");
+
+                }
+
+		printer.Outdent();
 		printer.Print("}\n");
 }
 
-void PHPCodeGenerator::PrintMessages(io::Printer &printer, const FileDescriptor* file) const {
-	for (int i = 0; i < file->message_type_count(); ++i) {
-		PrintMessage(printer, *file->message_type(i));
+void PHPCodeGenerator::PrintMessages(io::Printer &printer, const FileDescriptor & file) const {
+	for (int i = 0; i < file.message_type_count(); ++i) {
+		PrintMessage(printer, *file.message_type(i));
 	}
 }
 
+void PHPCodeGenerator::PrintEnums(io::Printer &printer, const FileDescriptor & file) const {
+	for (int i = 0; i < file.enum_type_count(); ++i) {
+		PrintEnum(printer, *file.enum_type(i) );
+	}
+}
+
+void PHPCodeGenerator::PrintServices(io::Printer &printer, const FileDescriptor & file) const {
+	for (int i = 0; i < file.service_count(); ++i) {
+		printer.Print("////\n//TODO Service\n////\n");
+	}
+}
 
 bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 				const string& parameter,
@@ -217,7 +274,9 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 
 	io::Printer printer(output.get(), '$');
 
-	PrintMessages(printer, file);
+	PrintMessages  (printer, *file);
+	PrintEnums     (printer, *file);
+	PrintServices  (printer, *file);
 
 	return true;
 }
