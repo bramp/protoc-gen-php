@@ -164,7 +164,6 @@ string UpperString(const string & s) {
   return newS;
 }
 
-
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
 		printer.Print("// Message $name$\nclass $name$ {\n", "name", message.name());
@@ -191,9 +190,12 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			variables["name"]             = "$" + UnderscoresToCamelCase(field);
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
 			variables["number"]           = SimpleItoa(field.number());
-			//variables["type"]             = ClassName(*field.message_type());
-			variables["type"]             = "TYPE";
-			variables["group_or_message"] = (field.type() == FieldDescriptor::TYPE_GROUP) ? "Group" : "Message";
+
+			if (field.type() == FieldDescriptor::TYPE_ENUM) {
+				variables["type"] = ClassName(*field.message_type());
+			} else {
+				variables["type"] = "";
+			}
 
 			printer.Print(variables,
 				"private $type$ $name$_ = null;\n"
