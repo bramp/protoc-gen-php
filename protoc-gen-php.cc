@@ -1,3 +1,4 @@
+#include "strutil.h" // TODO This header is from the offical protobuf source, but it is not normally installed
 
 #include <map>
 #include <string>
@@ -32,56 +33,6 @@ class PHPCodeGenerator : public CodeGenerator {
 PHPCodeGenerator::PHPCodeGenerator() {}
 PHPCodeGenerator::~PHPCodeGenerator() {}
 
-string StripProto(const string& filename) {
-  if (HasSuffixString(filename, ".protodevel")) {
-    return StripSuffixString(filename, ".protodevel");
-  } else {
-    return StripSuffixString(filename, ".proto");
-  }
-}
-
-
-const string& FieldName(const FieldDescriptor & field) {
-  // Groups are hacky:  The name of the field is just the lower-cased name
-  // of the group type.  In Java, though, we would like to retain the original
-  // capitalization of the type name.
-  if (field.type() == FieldDescriptor::TYPE_GROUP) {
-    return field.message_type()->name();
-  } else {
-    return field.name();
-  }
-}
-
-string FileClassName(const FileDescriptor & file) {
-    string basename;
-    string::size_type last_slash = file.name().find_last_of('/');
-    if (last_slash == string::npos) {
-      basename = file.name();
-    } else {
-      basename = file.name().substr(last_slash + 1);
-    }
-    return UnderscoresToCamelCaseImpl(StripProto(basename), true);
-}
-
-string FileJavaPackage(const FileDescriptor & file) {
-    string result = kDefaultPackage;
-    if (!file.package().empty()) {
-      if (!result.empty()) result += '.';
-      result += file.package();
-    }
-    return result;
-}
-
-
-string ClassName(const FileDescriptor & descriptor) {
-  string result = FileJavaPackage(descriptor);
-  if (!result.empty()) result += '.';
-  result += FileClassName(descriptor);
-  return result;
-}
-
-
-
 string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   string result;
   // Note:  I distrust ctype.h due to locales.
@@ -113,14 +64,87 @@ string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   return result;
 }
 
-string UnderscoresToCamelCase(const FieldDescriptor& field) {
+const string& FieldName(const FieldDescriptor & field) {
+  // Groups are hacky:  The name of the field is just the lower-cased name
+  // of the group type.  In Java, though, we would like to retain the original
+  // capitalization of the type name.
+  if (field.type() == FieldDescriptor::TYPE_GROUP) {
+    return field.message_type()->name();
+  } else {
+    return field.name();
+  }
+}
+
+
+string UnderscoresToCamelCase(const FieldDescriptor & field) {
   return UnderscoresToCamelCaseImpl(FieldName(field), false);
 }
 
-string UnderscoresToCapitalizedCamelCase(const FieldDescriptor& field) {
+string UnderscoresToCapitalizedCamelCase(const FieldDescriptor & field) {
   return UnderscoresToCamelCaseImpl(FieldName(field), true);
 }
 
+string StripProto(const string& filename) {
+  if (HasSuffixString(filename, ".protodevel")) {
+    return StripSuffixString(filename, ".protodevel");
+  } else {
+    return StripSuffixString(filename, ".proto");
+  }
+}
+
+string FileClassName(const FileDescriptor & file) {
+    string basename;
+    string::size_type last_slash = file.name().find_last_of('/');
+    if (last_slash == string::npos) {
+      basename = file.name();
+    } else {
+      basename = file.name().substr(last_slash + 1);
+    }
+    return UnderscoresToCamelCaseImpl(StripProto(basename), true);
+}
+
+string FileJavaPackage(const FileDescriptor & file) {
+    string result = "";//kDefaultPackage;
+    if (!file.package().empty()) {
+      if (!result.empty()) result += '.';
+      result += file.package();
+    }
+    return result;
+}
+
+string ClassName(const FileDescriptor & descriptor) {
+  string result = FileJavaPackage(descriptor);
+  if (!result.empty()) result += '.';
+  result += FileClassName(descriptor);
+  return result;
+}
+
+string ToJavaName(const string& full_name, const FileDescriptor & file) {
+  string result = ClassName(file);
+  if (!result.empty()) {
+    result += '.';
+  }
+  if (file.package().empty()) {
+    result += full_name;
+  } else {
+    // Strip the proto package from full_name since we've replaced it with
+    // the Java package.
+    result += full_name.substr(file.package().size() + 1);
+  }
+  return result;
+}
+
+// These return the fully-qualified class name corresponding to the given
+// descriptor.
+string ClassName(const Descriptor & descriptor) {
+  return ToJavaName(descriptor.full_name(), *descriptor.file());
+}
+string ClassName(const EnumDescriptor & descriptor) {
+  return ToJavaName(descriptor.full_name(), *descriptor.file());
+}
+string ClassName(const ServiceDescriptor & descriptor) {
+  return ToJavaName(descriptor.full_name(), *descriptor.file());
+}
 
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
@@ -143,13 +167,13 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			variables["name"]             = UnderscoresToCamelCase(field);
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
 			variables["number"]           = SimpleItoa(field.number());
-			variables["type"]             = ClassName(field.message_type());
+			//variables["type"]             = ClassName(*field.message_type());
+			variables["type"]             = "TYPE";
 			variables["group_or_message"] = (field.type() == FieldDescriptor::TYPE_GROUP) ? "Group" : "Message";
 
 			printer.Print(variables,
-				"private boolean has$capitalized_name$;\n"
-				"private $type$ $name$_;\n"
-				"public boolean has$capitalized_name$() { return has$capitalized_name$; }\n"
+				"private $type$ $name$_ = null;\n"
+				"public boolean has$capitalized_name$() { return !is_null($name$_); }\n"
 				"public $type$ get$capitalized_name$() { return $name$_; }\n");
 
                 }
