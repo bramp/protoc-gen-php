@@ -176,7 +176,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		}
 
 		printer.Print("// message `full_name`\n"
-		              "class `name` {\n",
+		              "class `name` extends Message {\n",
 		              "full_name", message.full_name(),
 		              "name", ClassName(message)
 		);
@@ -185,7 +185,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 		// Print fields map
 		printer.Print(
-			"// Arrays mapps field indexes to members\n"
+			"// Array maps field indexes to members\n"
 			"private $_map = array (\n"
 		);
 		printer.Indent();
@@ -245,7 +245,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 					"public function set`capitalized_name`($index, $value) {$this->`name`[$index] = $value;	}\n"
 					"public function add`capitalized_name`($value) { $this->`name`[] = $value; }\n"
-					"public function addAll`capitalized_name`($values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
+					"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
 				);
 
 			} else {
@@ -354,7 +354,10 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 
 	io::Printer printer(output.get(), '`');
 
-	printer.Print("<?php\n");
+	printer.Print(
+		"<?php\n"
+		"require('protocolbuffers.inc.php');\n"
+	);
 
 	PrintMessages  (printer, *file);
 	PrintEnums     (printer, *file);
