@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <algorithm>
 
 #include <google/protobuf/descriptor.h>
 
@@ -26,6 +27,9 @@ class PHPCodeGenerator : public CodeGenerator {
 
 		void PrintService   (io::Printer &printer, const ServiceDescriptor & service) const;
 		void PrintServices  (io::Printer &printer, const FileDescriptor & file) const;
+
+		string DefaultValueAsString(const FieldDescriptor & field, bool quote_string_type) const;
+		string ClassName(const string & full_name) const;
 
 	public:
 
@@ -98,60 +102,6 @@ string StripProto(const string& filename) {
   }
 }
 
-string FileClassName(const FileDescriptor & file) {
-    string basename;
-    string::size_type last_slash = file.name().find_last_of('/');
-    if (last_slash == string::npos) {
-      basename = file.name();
-    } else {
-      basename = file.name().substr(last_slash + 1);
-    }
-    return UnderscoresToCamelCaseImpl(StripProto(basename), true);
-}
-
-string FileJavaPackage(const FileDescriptor & file) {
-    string result = "";//kDefaultPackage;
-    if (!file.package().empty()) {
-      if (!result.empty()) result += '.';
-      result += file.package();
-    }
-    return result;
-}
-
-string ClassName(const FileDescriptor & descriptor) {
-  string result = FileJavaPackage(descriptor);
-  if (!result.empty()) result += '.';
-  result += FileClassName(descriptor);
-  return result;
-}
-
-string ToJavaName(const string& full_name, const FileDescriptor & file) {
-  string result = ClassName(file);
-  if (!result.empty()) {
-    result += '.';
-  }
-  if (file.package().empty()) {
-    result += full_name;
-  } else {
-    // Strip the proto package from full_name since we've replaced it with
-    // the Java package.
-    result += full_name.substr(file.package().size() + 1);
-  }
-  return result;
-}
-
-// These return the fully-qualified class name corresponding to the given
-// descriptor.
-string ClassName(const Descriptor & descriptor) {
-  return ToJavaName(descriptor.full_name(), *descriptor.file());
-}
-string ClassName(const EnumDescriptor & descriptor) {
-  return ToJavaName(descriptor.full_name(), *descriptor.file());
-}
-string ClassName(const ServiceDescriptor & descriptor) {
-  return ToJavaName(descriptor.full_name(), *descriptor.file());
-}
-
 string LowerString(const string & s) {
   string newS (s);
   LowerString(&newS);
@@ -164,10 +114,57 @@ string UpperString(const string & s) {
   return newS;
 }
 
-void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
+// Maps a Message full_name into a PHP name
+string PHPCodeGenerator::ClassName(const string & full_name) const {
+	string name (full_name);
+	replace(name.begin(), name.end(), '.', '_');
+	return name;
+}
 
-		printer.Print("// Message $name$\nclass $name$ {\n", "name", message.name());
-		printer.Indent();
+string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, bool quote_string_type) const {
+  switch (field.cpp_type()) {
+    case FieldDescriptor::CPPTYPE_INT32:
+      return SimpleItoa(field.default_value_int32());
+
+    case FieldDescriptor::CPPTYPE_INT64:
+      return SimpleItoa(field.default_value_int64());
+
+    case FieldDescriptor::CPPTYPE_UINT32:
+      return SimpleItoa(field.default_value_uint32());
+
+    case FieldDescriptor::CPPTYPE_UINT64:
+      return SimpleItoa(field.default_value_uint64());
+
+    case FieldDescriptor::CPPTYPE_FLOAT:
+      return SimpleFtoa(field.default_value_float());
+
+    case FieldDescriptor::CPPTYPE_DOUBLE:
+      return SimpleDtoa(field.default_value_double());
+
+    case FieldDescriptor::CPPTYPE_BOOL:
+      return field.default_value_bool() ? "true" : "false";
+
+    case FieldDescriptor::CPPTYPE_STRING:
+      if (quote_string_type)
+        return "\"" + CEscape(field.default_value_string()) + "\"";
+
+      if (field.type() == FieldDescriptor::TYPE_BYTES)
+        return CEscape(field.default_value_string());
+
+      return field.default_value_string();
+
+    case FieldDescriptor::CPPTYPE_ENUM:
+      return ClassName(field.enum_type()->name()) + "::" + field.default_value_enum()->name();
+
+    case FieldDescriptor::CPPTYPE_MESSAGE:
+      return "null";
+
+  }
+  return "";
+}
+
+
+void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
 		// Print nested messages
 		for (int i = 0; i < message.nested_type_count(); ++i) {
@@ -180,6 +177,14 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			PrintEnum(printer, *message.enum_type(i) );
 		}
 
+		printer.Print("// message `name`\n",
+		              "name", message.full_name());
+
+		printer.Print("class `name` {\n",
+		              "name", ClassName(message.full_name()));
+
+		printer.Indent();
+
 		// Print fields
                 for (int i = 0; i < message.field_count(); ++i) {
                         printer.Print("\n");
@@ -187,20 +192,41 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			const FieldDescriptor &field ( *message.field(i) );
 
 			map<string, string> variables;
-			variables["name"]             = "$" + UnderscoresToCamelCase(field);
+			variables["name"]             = UnderscoresToCamelCase(field) + "_"; // Variable name
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
 			variables["number"]           = SimpleItoa(field.number());
+			variables["comment"]          = field.DebugString();
+			variables["default"]          = DefaultValueAsString(field, true);
 
-			if (field.type() == FieldDescriptor::TYPE_ENUM) {
-				variables["type"] = ClassName(*field.message_type());
-			} else {
-				variables["type"] = "";
+			switch (field.type()) {
+//				If its a enum we should store it as a int
+//				case FieldDescriptor::TYPE_ENUM:
+//					variables["type"] = field.enum_type()->name() + " ";
+//					break;
+
+				case FieldDescriptor::TYPE_MESSAGE:
+				case FieldDescriptor::TYPE_GROUP:
+					variables["type"] = ClassName(field.message_type()->full_name()) + " ";
+					break;
+
+				default:
+					variables["type"] = "";
 			}
 
+
 			printer.Print(variables,
-				"private $type$ $name$_ = null;\n"
-				"public boolean has$capitalized_name$() { return !is_null($name$_); }\n"
-				"public $type$ get$capitalized_name$() { return $name$_; }\n");
+				"// `comment`\n"
+				"private $`name` = null;\n"
+				"public function has`capitalized_name`() { return !is_null($this->`name`); }\n"
+				"public function clear`capitalized_name`() { $this->`name` = null; }\n"
+
+				"public function get`capitalized_name`() { if(is_null($this->`name`)) return `default`; else return $this->`name`; }\n"
+			);
+
+			// TODO Change the set code to validate input depending on the variable type
+			printer.Print(variables,
+				"public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n"
+			);
 
                 }
 
@@ -212,7 +238,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		// Class Insertion Point
 		printer.Print(
 			"\n"
-			"# @@protoc_insertion_point(class_scope:$full_name$)\n",
+			"// @@protoc_insertion_point(class_scope:`full_name`)\n",
 			"full_name", message.full_name());
 
 		printer.Outdent();
@@ -221,7 +247,12 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e) const {
 
-		printer.Print("// Enum $name$\nclass $name$ {\n", "name", e.name());
+		printer.Print("// enum `name`\n",
+		              "name", e.full_name() );
+
+		printer.Print("class `name` {\n",
+		              "name", ClassName(e.full_name()) );
+
 		printer.Indent();
 
 		// Print fields
@@ -233,12 +264,12 @@ void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e)
 			variables["number"] = SimpleItoa(value.number());
 
 			printer.Print(variables,
-				"const $name$ = $number$;\n");
+				"const `name` = `number`;\n");
 
                 }
 
 		printer.Outdent();
-		printer.Print("}\n");
+		printer.Print("}\n\n");
 }
 
 void PHPCodeGenerator::PrintMessages(io::Printer &printer, const FileDescriptor & file) const {
@@ -274,11 +305,15 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 		output_directory->Open(php_filename)
 	);
 
-	io::Printer printer(output.get(), '$');
+	io::Printer printer(output.get(), '`');
+
+	printer.Print("<?php\n");
 
 	PrintMessages  (printer, *file);
 	PrintEnums     (printer, *file);
 	PrintServices  (printer, *file);
+
+	printer.Print("?>");
 
 	return true;
 }
