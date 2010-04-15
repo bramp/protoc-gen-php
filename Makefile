@@ -33,4 +33,5 @@ debug: all
 
 test: all
 	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php addressbook.proto
-	cat test.php
+	echo | cat -n test.php -
+	php --syntax-check test.php
