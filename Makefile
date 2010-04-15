@@ -31,7 +31,9 @@ debug: all
 	gdb --args protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php addressbook.proto
 	cat test.php
 
+TESTS = addressbook.proto
 test: all
-	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php addressbook.proto
-	echo | cat -n test.php -
-	php --syntax-check test.php
+	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $(TESTS)
+	echo | cat -n $(TESTS).php -
+	php --syntax-check $(TESTS).php
+	php test.php $(TESTS)

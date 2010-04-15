@@ -176,7 +176,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		}
 
 		printer.Print("// message `full_name`\n"
-		              "class `name` extends Message {\n",
+		              "class `name` {\n",
 		              "full_name", message.full_name(),
 		              "name", ClassName(message)
 		);
@@ -184,15 +184,19 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Indent();
 
 		// Print fields map
+		vector<const FieldDescriptor *> required_fields;
 		printer.Print(
 			"// Array maps field indexes to members\n"
-			"private $_map = array (\n"
+			"private static $_map = array (\n"
 		);
 		printer.Indent();
                 for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
 
-			printer.Print("`index` => `value`,\n",
+			if (field.is_required())
+				required_fields.push_back( &field );
+
+			printer.Print("`index` => '`value`',\n",
 				"index", SimpleItoa(field.number()),
 				"value", VariableName(field)
 			);
@@ -200,16 +204,64 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Outdent();
 		printer.Print(");\n\n");
 
-		vector<const FieldDescriptor *> required_fields;
+		// Constructor
+		printer.Print(
+			"\n"
+			"function __construct($fp) {\n"
+		);
+		printer.Indent();
+
+		printer.Print(
+			"$value = read_varint($fp);\n"
+			"$wire  = $value & 0x07;\n"
+			"$field = $value >> 3;\n"
+			"var_dump(\"Found $field\");\n"
+			"switch($field) {\n"
+		);
+		printer.Indent();
+                for (int i = 0; i < message.field_count(); ++i) {
+			const FieldDescriptor &field ( *message.field(i) );
+			map<string, string> variables;
+			variables["index"] = SimpleItoa(field.number());
+			variables["name"]  = VariableName(field);
+
+			printer.Print(
+				variables,
+				"case `index`:\n"
+				"  $this->`name` = null;\n"
+				"  break;\n"
+			);
+		}
+		printer.Print(
+			"default:\n"
+			"  skip($fp, $wire);\n"
+		);
+		printer.Outdent();
+		printer.Print("}\n");
+
+		printer.Outdent();
+		printer.Print("}\n");
+
+		// Validate required fields are included
+		printer.Print(
+			"\n"
+			"public function validateRequired() {\n"
+		);
+		printer.Indent();
+		for (int i = 0; i < required_fields.size(); ++i) {
+			printer.Print("if ($this->`name` === null) return false;\n",
+				"name", VariableName(*required_fields[i])
+			);
+		}
+		printer.Print("return true;\n");
+		printer.Outdent();
+		printer.Print("}\n");
 
 		// Print fields variables and methods
                 for (int i = 0; i < message.field_count(); ++i) {
                         printer.Print("\n");
 
 			const FieldDescriptor &field ( *message.field(i) );
-
-			if (field.is_required())
-				required_fields.push_back( &field );
 
 			map<string, string> variables;
 			variables["name"]             = VariableName(field);
@@ -265,21 +317,6 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				);
 			}
                 }
-
-		// Validate required fields are included
-		printer.Print(
-			"\n"
-			"public function validateRequired() {\n"
-		);
-		printer.Indent();
-		for (int i = 0; i < required_fields.size(); ++i) {
-			printer.Print("if ($this->`name` === null) return false;\n",
-				"name", VariableName(*required_fields[i])
-			);
-		}
-		printer.Print("return true;\n");
-		printer.Outdent();
-		printer.Print("}\n");
 
 		// Class Insertion Point
 		printer.Print(
@@ -342,10 +379,7 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 				OutputDirectory* output_directory,
 				string* error) const {
 
-	string php_filename;
-//	php_filename += file_generator.filename();
-	php_filename += "test";
-	php_filename += ".php";
+	string php_filename ( file->name() + ".php" );
 
 	// Generate main file.
 	scoped_ptr<io::ZeroCopyOutputStream> output(
@@ -356,7 +390,8 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 
 	printer.Print(
 		"<?php\n"
-		"require('protocolbuffers.inc.php');\n"
+		"// Please include the below file before this\n"
+		"//require('protocolbuffers.inc.php');\n"
 	);
 
 	PrintMessages  (printer, *file);
