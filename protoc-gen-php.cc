@@ -29,7 +29,12 @@ class PHPCodeGenerator : public CodeGenerator {
 		void PrintServices  (io::Printer &printer, const FileDescriptor & file) const;
 
 		string DefaultValueAsString(const FieldDescriptor & field, bool quote_string_type) const;
-		string ClassName(const string & full_name) const;
+
+		// Maps names into PHP names
+		template <class DescriptorType>
+		string ClassName(const DescriptorType & descriptor) const;
+
+		string VariableName(const FieldDescriptor & field) const;
 
 	public:
 
@@ -74,24 +79,12 @@ string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   return result;
 }
 
-const string& FieldName(const FieldDescriptor & field) {
-  // Groups are hacky:  The name of the field is just the lower-cased name
-  // of the group type.  In Java, though, we would like to retain the original
-  // capitalization of the type name.
-  if (field.type() == FieldDescriptor::TYPE_GROUP) {
-    return field.message_type()->name();
-  } else {
-    return field.name();
-  }
-}
-
-
 string UnderscoresToCamelCase(const FieldDescriptor & field) {
-  return UnderscoresToCamelCaseImpl(FieldName(field), false);
+  return UnderscoresToCamelCaseImpl(field.name(), false);
 }
 
 string UnderscoresToCapitalizedCamelCase(const FieldDescriptor & field) {
-  return UnderscoresToCamelCaseImpl(FieldName(field), true);
+  return UnderscoresToCamelCaseImpl(field.name(), true);
 }
 
 string StripProto(const string& filename) {
@@ -115,10 +108,15 @@ string UpperString(const string & s) {
 }
 
 // Maps a Message full_name into a PHP name
-string PHPCodeGenerator::ClassName(const string & full_name) const {
-	string name (full_name);
+template <class DescriptorType>
+string PHPCodeGenerator::ClassName(const DescriptorType & descriptor) const {
+	string name (descriptor.full_name());
 	replace(name.begin(), name.end(), '.', '_');
 	return name;
+}
+
+string PHPCodeGenerator::VariableName(const FieldDescriptor & field) const {
+	return UnderscoresToCamelCase(field) + '_';
 }
 
 string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, bool quote_string_type) const {
@@ -154,7 +152,7 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
       return field.default_value_string();
 
     case FieldDescriptor::CPPTYPE_ENUM:
-      return ClassName(field.enum_type()->name()) + "::" + field.default_value_enum()->name();
+      return ClassName(*field.enum_type()) + "::" + field.default_value_enum()->name();
 
     case FieldDescriptor::CPPTYPE_MESSAGE:
       return "null";
@@ -177,24 +175,45 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			PrintEnum(printer, *message.enum_type(i) );
 		}
 
-		printer.Print("// message `name`\n",
-		              "name", message.full_name());
-
-		printer.Print("class `name` {\n",
-		              "name", ClassName(message.full_name()));
+		printer.Print("// message `full_name`\n"
+		              "class `name` {\n",
+		              "full_name", message.full_name(),
+		              "name", ClassName(message)
+		);
 
 		printer.Indent();
 
-		// Print fields
+		// Print fields map
+		printer.Print(
+			"// Arrays mapps field indexes to members\n"
+			"private $_map = array (\n"
+		);
+		printer.Indent();
+                for (int i = 0; i < message.field_count(); ++i) {
+			const FieldDescriptor &field ( *message.field(i) );
+
+			printer.Print("`index` => `value`,\n",
+				"index", SimpleItoa(field.number()),
+				"value", VariableName(field)
+			);
+		}
+		printer.Outdent();
+		printer.Print(");\n\n");
+
+		vector<const FieldDescriptor *> required_fields;
+
+		// Print fields variables and methods
                 for (int i = 0; i < message.field_count(); ++i) {
                         printer.Print("\n");
 
 			const FieldDescriptor &field ( *message.field(i) );
 
+			if (field.is_required())
+				required_fields.push_back( &field );
+
 			map<string, string> variables;
-			variables["name"]             = UnderscoresToCamelCase(field) + "_"; // Variable name
+			variables["name"]             = VariableName(field);
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
-			variables["number"]           = SimpleItoa(field.number());
 			variables["comment"]          = field.DebugString();
 			variables["default"]          = DefaultValueAsString(field, true);
 
@@ -206,40 +225,68 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 				case FieldDescriptor::TYPE_MESSAGE:
 				case FieldDescriptor::TYPE_GROUP:
-					variables["type"] = ClassName(field.message_type()->full_name()) + " ";
+					variables["type"] = ClassName(*field.message_type()) + " ";
 					break;
 
 				default:
 					variables["type"] = "";
 			}
 
+			if (field.is_repeated()) {
+				// Repeated field
+				printer.Print(variables,
+					"// `comment`\n"
+					"private $`name` = null;\n"
+					"public function clear`capitalized_name`() { $this->`name` = null; }\n"
 
-			printer.Print(variables,
-				"// `comment`\n"
-				"private $`name` = null;\n"
-				"public function has`capitalized_name`() { return !is_null($this->`name`); }\n"
-				"public function clear`capitalized_name`() { $this->`name` = null; }\n"
+					"public function get`capitalized_name`Count() { if ($this->`name` === null ) return 0; else return count($this->`name`); }\n"
+					"public function get`capitalized_name`($index) { return $this->`name`[$index]; }\n"
+					"public function get`capitalized_name`Array() { if ($this->`name` === null ) return array(); else return $this->`name`; }\n"
 
-				"public function get`capitalized_name`() { if(is_null($this->`name`)) return `default`; else return $this->`name`; }\n"
-			);
+					"public function set`capitalized_name`($index, $value) {$this->`name`[$index] = $value;	}\n"
+					"public function add`capitalized_name`($value) { $this->`name`[] = $value; }\n"
+					"public function addAll`capitalized_name`($values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
+				);
 
-			// TODO Change the set code to validate input depending on the variable type
-			printer.Print(variables,
-				"public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n"
-			);
+			} else {
+				// Non repeated field
+				printer.Print(variables,
+					"// `comment`\n"
+					"private $`name` = null;\n"
+					"public function clear`capitalized_name`() { $this->`name` = null; }\n"
+					"public function has`capitalized_name`() { return $this->`name` !== null; }\n"
 
+					"public function get`capitalized_name`() { if($this->`name` === null) return `default`; else return $this->`name`; }\n"
+				);
+
+				// TODO Change the set code to validate input depending on the variable type
+				printer.Print(variables,
+					"public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n"
+				);
+			}
                 }
 
-//		map<string, string> m;
-//		m["descriptor_key"]  = kDescriptorKey;
-//		m["descriptor_name"] = ModuleLevelDescriptorName(message);
-//		printer.Print(m, "$descriptor_key$ = $descriptor_name$\n");
+		// Validate required fields are included
+		printer.Print(
+			"\n"
+			"public function validateRequired() {\n"
+		);
+		printer.Indent();
+		for (int i = 0; i < required_fields.size(); ++i) {
+			printer.Print("if ($this->`name` === null) return false;\n",
+				"name", VariableName(*required_fields[i])
+			);
+		}
+		printer.Print("return true;\n");
+		printer.Outdent();
+		printer.Print("}\n");
 
 		// Class Insertion Point
 		printer.Print(
 			"\n"
 			"// @@protoc_insertion_point(class_scope:`full_name`)\n",
-			"full_name", message.full_name());
+			"full_name", message.full_name()
+		);
 
 		printer.Outdent();
 		printer.Print("}\n\n");
@@ -247,11 +294,11 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e) const {
 
-		printer.Print("// enum `name`\n",
-		              "name", e.full_name() );
-
-		printer.Print("class `name` {\n",
-		              "name", ClassName(e.full_name()) );
+		printer.Print("// enum `full_name`\n"
+		              "class `name` {\n",
+		              "full_name", e.full_name(),
+		              "name", ClassName(e)
+		);
 
 		printer.Indent();
 
