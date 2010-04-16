@@ -1,3 +1,19 @@
+/**
+ * PHP Protocol Buffer Generator Plugin for protoc
+ * By Andrew Brampton (c) 2010
+ *
+ * TODO
+ *  Support the packed option
+ *  Merge multiple messages
+ *  Lots of optomisations
+ *  Track unknown fields?
+ *  Support the deprecated groups encoding
+ *  Extensions
+ *  Services
+ *  Packages
+ *  Options
+ *  Better validation
+ */
 #include "strutil.h" // TODO This header is from the offical protobuf source, but it is not normally installed
 
 #include <map>
@@ -85,14 +101,6 @@ string UnderscoresToCamelCase(const FieldDescriptor & field) {
 
 string UnderscoresToCapitalizedCamelCase(const FieldDescriptor & field) {
   return UnderscoresToCamelCaseImpl(field.name(), true);
-}
-
-string StripProto(const string& filename) {
-  if (HasSuffixString(filename, ".protodevel")) {
-    return StripSuffixString(filename, ".protodevel");
-  } else {
-    return StripSuffixString(filename, ".proto");
-  }
 }
 
 string LowerString(const string & s) {
@@ -223,50 +231,71 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
                 for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
 			map<string, string> variables;
-			variables["index"]    = SimpleItoa(field.number());
-			variables["name"]     = VariableName(field);
+			string var ( VariableName(field) );
+			if (field.is_repeated())
+				var += "[]";
 
 			switch (field.type()) {
 				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-					variables["commands"] = "$this->`name` = read_double($fp); $limit-=8;";
+					variables["commands"] = "$this->" + var + " = read_double($fp); $limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-					variables["commands"] = "$this->`name` = read_float($fp); $limit-=4;";
+					variables["commands"] = "$this->" + var + " = read_float($fp); $limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
 				case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
 				case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
-					variables["commands"] = "$this->`name` = read_varint($fp, &$limit);";
+				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
+				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
+					variables["commands"] = "$this->" + var + " = read_varint($fp, &$limit);";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-					variables["commands"] = "";
+					variables["commands"] = "$this->" + var + " = read_uint64($fp); $limit-=8;";
+					break;
+
+				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
+					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-					variables["commands"] = "";
+					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=4;";
+					break;
+
+				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
+					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-					variables["commands"] = "";
+					variables["commands"] = "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
 					break;
 
-				case FieldDescriptor::TYPE_STRING: // UTF-8 text.
-				case FieldDescriptor::TYPE_GROUP: // Tag-delimited message.  Deprecated.
-				case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
+				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
+				case FieldDescriptor::TYPE_GROUP:   // Tag-delimited message.  Deprecated.
+				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
+					variables["commands"] = "$len = read_varint($fp, &$limit); $this->" + var + " = fread($fp, $len); $limit-=$len;";
+					break;
 
-				case FieldDescriptor::TYPE_BYTES: // Arbitrary byte array.
-				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
-				case FieldDescriptor::TYPE_ENUM: // Enum, varint on the wire
-				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-				case FieldDescriptor::TYPE_SINT32: // int32, ZigZag-encoded varint on the wire
-				case FieldDescriptor::TYPE_SINT64: // int64, ZigZag-encoded varint on the wire
+				case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
+					const Descriptor & d( *field.message_type() );
+					variables["commands"] = "$len = read_varint($fp, &$limit); $limit-=$len; $this->" + var + " = new " + ClassName(d) + "($fp, $len);";
+					break;
+
+				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
+					variables["commands"] = "$this->" + var + " = read_zint32($fp); $limit-=4;";
+					break;
+
+				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
+					variables["commands"] = "$this->" + var + " = read_zint32($fp); $limit-=8;";
+					break;
+
 				default:
-					throw "Unsupported type";// TODO use the proper exception
+					throw "Error: Unsupported type";// TODO use the proper exception
 			}
+
+			variables["index"]    = SimpleItoa(field.number());
 
 			printer.Print(
 				variables,
@@ -282,7 +311,6 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Outdent();
 		printer.Print(
 			"  }\n"
-			"  $limit -= skip($fp, $wire);\n"
 			"}\n"
 		);
 
@@ -435,17 +463,24 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 
 	io::Printer printer(output.get(), '`');
 
-	printer.Print(
-		"<?php\n"
-		"// Please include the below file before this\n"
-		"//require('protocolbuffers.inc.php');\n"
-	);
+	try {
+		printer.Print(
+			"<?php\n"
+			"// Please include the below file before this\n"
+			"//require('protocolbuffers.inc.php');\n"
+		);
 
-	PrintMessages  (printer, *file);
-	PrintEnums     (printer, *file);
-	PrintServices  (printer, *file);
+		PrintMessages  (printer, *file);
+		PrintEnums     (printer, *file);
+		PrintServices  (printer, *file);
 
-	printer.Print("?>");
+		printer.Print("?>");
+
+	} catch (const char *msg) {
+		error->assign( msg );
+		return false;
+	}
+
 
 	return true;
 }

@@ -27,13 +27,17 @@ clean:
 depend: $(SRCS)
 	makedepend $(INCLUDES) $^
 
+valgrind: DEBUGCMD=gdb --args
 debug: all
 	gdb --args protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php addressbook.proto
-	cat test.php
+
+valgrind: DEBUGCMD=valgrind --trace-children=yes --leak-check=full
+valgrind: all test
 
 TESTS = addressbook.proto
+
 test: all
-	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $(TESTS)
+	$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $(TESTS)
 	echo | cat -n $(TESTS).php -
 	php --syntax-check $(TESTS).php
 	php test.php $(TESTS)
