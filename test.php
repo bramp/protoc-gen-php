@@ -1,12 +1,16 @@
 <?php
 	require('protocolbuffers.inc.php');
-	require('addressbook.proto.php');
 
-	$fp = fopen('test.book', 'rb');
+	$test = $argv[1];
+	require("$test.php");
 
-	$m = new tutorial_AddressBook($fp);
+	if ($test == 'addressbook.proto') {
+		$fp = fopen('test.book', 'rb');
 
-	var_dump($m);
+		$m = new tutorial_AddressBook($fp);
 
-	fclose($fp);
+		var_dump($m);
+
+		fclose($fp);
+	}
 ?>

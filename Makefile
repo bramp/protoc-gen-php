@@ -34,10 +34,12 @@ debug: all
 valgrind: DEBUGCMD=valgrind --trace-children=yes --leak-check=full
 valgrind: all test
 
-TESTS = addressbook.proto
+TESTS = addressbook.proto market.proto
 
 test: all
-	$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $(TESTS)
-	echo | cat -n $(TESTS).php -
-	php --syntax-check $(TESTS).php
-	php test.php $(TESTS)
+	for file in $(TESTS); do \
+		$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $${file}; \
+		echo | cat -n $${file}.php -; \
+		php --syntax-check $${file}.php; \
+		php test.php $${file}; \
+	done ;

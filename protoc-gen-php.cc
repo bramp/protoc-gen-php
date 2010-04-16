@@ -219,29 +219,34 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		);
 		printer.Indent();
 
+		printer.Print("while(!feof($fp) && $limit > 0) {\n");
+		printer.Indent();
+
 		printer.Print(
-			"while(!feof($fp) && $limit > 0) {\n"
-			"  $value = read_varint($fp, &$limit);\n"
-			"  $wire  = $value & 0x07;\n"
-			"  $field = $value >> 3;\n"
-			"  var_dump(\"Found $field type $wire\");\n"
-			"  switch($field) {\n"
+			"$value = read_varint($fp, &$limit);\n"
+			"$wire  = $value & 0x07;\n"
+			"$field = $value >> 3;\n"
+			"var_dump(\"Found $field type $wire\");\n"
+			"switch($field) {\n"
 		);
 		printer.Indent();
                 for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
-			map<string, string> variables;
+
 			string var ( VariableName(field) );
 			if (field.is_repeated())
 				var += "[]";
+			string commands;
 
 			switch (field.type()) {
 				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-					variables["commands"] = "$this->" + var + " = read_double($fp); $limit-=8;";
+					commands = "$this->" + var + " = read_double($fp);\n"
+					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-					variables["commands"] = "$this->" + var + " = read_float($fp); $limit-=4;";
+					commands = "$this->" + var + " = read_float($fp);\n"
+					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
@@ -249,65 +254,76 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
 				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-					variables["commands"] = "$this->" + var + " = read_varint($fp, &$limit);";
+					commands = "$this->" + var + " = read_varint($fp, &$limit);";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-					variables["commands"] = "$this->" + var + " = read_uint64($fp); $limit-=8;";
+					commands = "$this->" + var + " = read_uint64($fp);\n"
+					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=8;";
+					commands = "$this->" + var + " = read_uint32($fp);\n"
+					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=4;";
+					commands = "$this->" + var + " = read_uint32($fp);\n"
+					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-					variables["commands"] = "$this->" + var + " = read_uint32($fp); $limit-=4;";
+					commands = "$this->" + var + " = read_uint32($fp);\n"
+					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-					variables["commands"] = "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
+					commands = "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
 					break;
 
 				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 				case FieldDescriptor::TYPE_GROUP:   // Tag-delimited message.  Deprecated.
 				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-					variables["commands"] = "$len = read_varint($fp, &$limit); $this->" + var + " = fread($fp, $len); $limit-=$len;";
+					commands = "$len = read_varint($fp, &$limit);\n"
+					           "$this->" + var + " = fread($fp, $len);\n"
+					           "$limit-=$len;";
 					break;
 
 				case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
 					const Descriptor & d( *field.message_type() );
-					variables["commands"] = "$len = read_varint($fp, &$limit); $limit-=$len; $this->" + var + " = new " + ClassName(d) + "($fp, $len);";
+					commands = "$len = read_varint($fp, &$limit);\n"
+					           "$limit-=$len;\n"
+					           "$this->" + var + " = new " + ClassName(d) + "($fp, $len);";
 					break;
 
 				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-					variables["commands"] = "$this->" + var + " = read_zint32($fp); $limit-=4;";
+					commands = "$this->" + var + " = read_zint32($fp);\n"
+					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-					variables["commands"] = "$this->" + var + " = read_zint32($fp); $limit-=8;";
+					commands = "$this->" + var + " = read_zint32($fp);\n"
+					           "$limit-=8;";
 					break;
 
 				default:
 					throw "Error: Unsupported type";// TODO use the proper exception
 			}
 
-			variables["index"]    = SimpleItoa(field.number());
+			printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
 
-			printer.Print(
-				variables,
-				"  case `index`:\n"
-				"    `commands`\n"
-				"    break;\n"
-			);
+			printer.Indent();
+			printer.Print(commands.c_str());
+			printer.Print("\nbreak;\n");
+			printer.Outdent();
 		}
-		printer.Print(
-			"  default:\n"
-			"    $limit -= skip($fp, $wire);\n"
+
+		printer.Print( // TODO Store the unknown field
+			"default:\n"
+			"  $limit -= skip($fp, $wire);\n"
 		);
+
+		printer.Outdent();
 		printer.Outdent();
 		printer.Print(
 			"  }\n"
