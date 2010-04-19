@@ -183,9 +183,12 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			PrintEnum(printer, *message.enum_type(i) );
 		}
 
-		printer.Print("// message `full_name`\n"
-		              "class `name` {\n",
-		              "full_name", message.full_name(),
+		printer.Print("// `type` `full_name`\n",
+		              "type", /* == FieldDescriptor::TYPE_GROUP ? "group" : */ "message",
+		              "full_name", message.full_name()
+		);
+
+		printer.Print("class `name` {\n",
 		              "name", ClassName(message)
 		);
 
@@ -215,7 +218,16 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		// Constructor
 		printer.Print(
 			"\n"
-			"function __construct($fp, $limit = PHP_INT_MAX) {\n"
+			"function __construct($fp = NULL, $limit = PHP_INT_MAX) {\n"
+			"  if($fp !== NULL)\n"
+			"    $this->read($fp, $limit);\n"
+			"}\n"
+		);
+
+		// Read
+		printer.Print(
+			"\n"
+			"function read($fp, $limit = PHP_INT_MAX) {\n"
 		);
 		printer.Indent();
 
@@ -226,26 +238,32 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			"$value = read_varint($fp, &$limit);\n"
 			"$wire  = $value & 0x07;\n"
 			"$field = $value >> 3;\n"
-			"var_dump(\"Found $field type $wire\");\n"
-			"switch($field) {\n"
+			"var_dump(\"`name`: Found $field type \" . get_wiretype($wire));\n"
+			"switch($field) {\n",
+			"name", ClassName(message)
 		);
 		printer.Indent();
-                for (int i = 0; i < message.field_count(); ++i) {
+		for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
 
 			string var ( VariableName(field) );
 			if (field.is_repeated())
 				var += "[]";
+			if (field.is_packable())
+				throw "Error we do not yet support packed values";
+
 			string commands;
 
 			switch (field.type()) {
 				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-					commands = "$this->" + var + " = read_double($fp);\n"
+					commands = "ASSERT($wire == 1);\n"
+					           "$this->" + var + " = read_double($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-					commands = "$this->" + var + " = read_float($fp);\n"
+					commands = "ASSERT($wire == 5);\n"
+					           "$this->" + var + " = read_float($fp);\n"
 					           "$limit-=4;";
 					break;
 
@@ -254,55 +272,72 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
 				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-					commands = "$this->" + var + " = read_varint($fp, &$limit);";
+					commands = "ASSERT($wire == 0);\n"
+					           "$this->" + var + " = read_varint($fp, &$limit);";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-					commands = "$this->" + var + " = read_uint64($fp);\n"
+					commands = "ASSERT($wire == 1);\n"
+					           "$this->" + var + " = read_uint64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-					commands = "$this->" + var + " = read_uint32($fp);\n"
+					commands = "ASSERT($wire == 1);\n"
+					           "$this->" + var + " = read_int64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-					commands = "$this->" + var + " = read_uint32($fp);\n"
+					commands = "ASSERT($wire == 5);\n"
+					           "$this->" + var + " = read_uint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-					commands = "$this->" + var + " = read_uint32($fp);\n"
+					commands = "ASSERT($wire == 5);\n"
+					           "$this->" + var + " = read_int32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-					commands = "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
+					commands = "ASSERT($wire == 0);\n"
+					           "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
 					break;
 
 				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
-				case FieldDescriptor::TYPE_GROUP:   // Tag-delimited message.  Deprecated.
 				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-					commands = "$len = read_varint($fp, &$limit);\n"
+					commands = "ASSERT($wire == 2);\n"
+					           "$len = read_varint($fp, &$limit);\n"
 					           "$this->" + var + " = fread($fp, $len);\n"
 					           "$limit-=$len;";
 					break;
 
-				case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
+				case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
 					const Descriptor & d( *field.message_type() );
-					commands = "$len = read_varint($fp, &$limit);\n"
+					commands = "ASSERT($wire == 3);\n"
+					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$limit);\n";
+				}
+					break;
+
+				case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
+					const Descriptor & d( *field.message_type() );
+					commands = "ASSERT($wire == 2);\n"
+					           "$len = read_varint($fp, &$limit);\n"
 					           "$limit-=$len;\n"
 					           "$this->" + var + " = new " + ClassName(d) + "($fp, $len);";
+				}
 					break;
 
 				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-					commands = "$this->" + var + " = read_zint32($fp);\n"
+					commands = "ASSERT($wire == 5);\n"
+					           "$this->" + var + " = read_zint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-					commands = "$this->" + var + " = read_zint32($fp);\n"
+					commands = "ASSERT($wire == 1);\n"
+					           "$this->" + var + " = read_zint32($fp);\n"
 					           "$limit-=8;";
 					break;
 
@@ -313,6 +348,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
 
 			printer.Indent();
+
 			printer.Print(commands.c_str());
 			printer.Print("\nbreak;\n");
 			printer.Outdent();
@@ -321,6 +357,8 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Print( // TODO Store the unknown field
 			"default:\n"
 			"  $limit -= skip($fp, $wire);\n"
+			"  var_dump(\"`name`: Skipped $field\");",
+			"name", ClassName(message)
 		);
 
 		printer.Outdent();
@@ -333,7 +371,18 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Outdent();
 		printer.Print("}\n");
 
-		// Validate required fields are included
+		// Write
+		printer.Print(
+			"\n"
+			"function write($fp, $limit = PHP_INT_MAX) {\n"
+		);
+		printer.Indent();
+
+		printer.Outdent();
+		printer.Print("}\n");
+
+
+		// Validate that the required fields are included
 		printer.Print(
 			"\n"
 			"public function validateRequired() {\n"
@@ -357,8 +406,16 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			map<string, string> variables;
 			variables["name"]             = VariableName(field);
 			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
-			variables["comment"]          = field.DebugString();
 			variables["default"]          = DefaultValueAsString(field, true);
+			variables["comment"]          = field.DebugString();
+
+			if (field.type() == FieldDescriptor::TYPE_GROUP) {
+				size_t p = variables["comment"].find ('{');
+				if (p != string::npos)
+					variables["comment"].resize (p - 1);
+			}
+
+			// TODO Check that comment is a single line
 
 			switch (field.type()) {
 //				If its a enum we should store it as a int
@@ -385,7 +442,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 					"public function get`capitalized_name`Count() { if ($this->`name` === null ) return 0; else return count($this->`name`); }\n"
 					"public function get`capitalized_name`($index) { return $this->`name`[$index]; }\n"
 					"public function get`capitalized_name`Array() { if ($this->`name` === null ) return array(); else return $this->`name`; }\n"
+				);
 
+				// TODO Change the set code to validate input depending on the variable type
+				printer.Print(variables,
 					"public function set`capitalized_name`($index, $value) {$this->`name`[$index] = $value;	}\n"
 					"public function add`capitalized_name`($value) { $this->`name`[] = $value; }\n"
 					"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
