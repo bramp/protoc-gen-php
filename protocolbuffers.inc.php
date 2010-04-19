@@ -70,8 +70,8 @@
 
 			//case 3: // Start group TODO we must keep looping until we find the closing end grou
 
-			case 4: // End group
-				return 0; // Do nothing
+			//case 4: // End group - We should never skip a end group!
+			//	return 0; // Do nothing
 
 			case 5: // 32bit
 				if (fseek($fp, 4, SEEK_CUR) === -1)

@@ -176,15 +176,33 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		for (int i = 0; i < message.nested_type_count(); ++i) {
 			printer.Print("\n");
 			PrintMessage(printer, *message.nested_type(i));
-	        }
+		}
 
 		// Print nested enum
 		for (int i = 0; i < message.enum_type_count(); ++i) {
 			PrintEnum(printer, *message.enum_type(i) );
 		}
 
+		// Find out if we are a nested type, if so what kind
+		const FieldDescriptor * parentField = NULL;
+		const char * type = "message";
+		if (message.containing_type() != NULL) {
+			const Descriptor & parent ( *message.containing_type() );
+
+			// Find which field we are
+			for (int i = 0; i < parent.field_count(); ++i) {
+				if (parent.field(i)->message_type() == &message) {
+					parentField = parent.field(i);
+					break;
+				}
+			}
+			if (parentField->type() == FieldDescriptor::TYPE_GROUP)
+				type = "group";
+		}
+
+		// Start printing the message
 		printer.Print("// `type` `full_name`\n",
-		              "type", /* == FieldDescriptor::TYPE_GROUP ? "group" : */ "message",
+		              "type", type,
 		              "full_name", message.full_name()
 		);
 
@@ -243,6 +261,14 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			"name", ClassName(message)
 		);
 		printer.Indent();
+
+		// If we are a group message, we need to add a end group case
+		if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
+			printer.Print("case `index`:\n", "index", SimpleItoa(parentField->number()) );
+			printer.Print( "  ASSERT('$wire == 4');\n"
+			               "  return;\n");
+		}
+
 		for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
 
@@ -256,13 +282,13 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 			switch (field.type()) {
 				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-					commands = "ASSERT($wire == 1);\n"
+					commands = "ASSERT('$wire == 1');\n"
 					           "$this->" + var + " = read_double($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-					commands = "ASSERT($wire == 5);\n"
+					commands = "ASSERT('$wire == 5');\n"
 					           "$this->" + var + " = read_float($fp);\n"
 					           "$limit-=4;";
 					break;
@@ -272,42 +298,42 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
 				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-					commands = "ASSERT($wire == 0);\n"
+					commands = "ASSERT('$wire == 0');\n"
 					           "$this->" + var + " = read_varint($fp, &$limit);";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-					commands = "ASSERT($wire == 1);\n"
+					commands = "ASSERT('$wire == 1');\n"
 					           "$this->" + var + " = read_uint64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-					commands = "ASSERT($wire == 1);\n"
+					commands = "ASSERT('$wire == 1');\n"
 					           "$this->" + var + " = read_int64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-					commands = "ASSERT($wire == 5);\n"
+					commands = "ASSERT('$wire == 5');\n"
 					           "$this->" + var + " = read_uint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-					commands = "ASSERT($wire == 5);\n"
+					commands = "ASSERT('$wire == 5');\n"
 					           "$this->" + var + " = read_int32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-					commands = "ASSERT($wire == 0);\n"
+					commands = "ASSERT('$wire == 0');\n"
 					           "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
 					break;
 
 				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-					commands = "ASSERT($wire == 2);\n"
+					commands = "ASSERT('$wire == 2');\n"
 					           "$len = read_varint($fp, &$limit);\n"
 					           "$this->" + var + " = fread($fp, $len);\n"
 					           "$limit-=$len;";
@@ -315,28 +341,29 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 				case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
 					const Descriptor & d( *field.message_type() );
-					commands = "ASSERT($wire == 3);\n"
-					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$limit);\n";
-				}
+					commands = "ASSERT('$wire == 3');\n"
+					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$limit);";
 					break;
+				}
 
 				case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
 					const Descriptor & d( *field.message_type() );
-					commands = "ASSERT($wire == 2);\n"
+					commands = "ASSERT('$wire == 2');\n"
 					           "$len = read_varint($fp, &$limit);\n"
 					           "$limit-=$len;\n"
-					           "$this->" + var + " = new " + ClassName(d) + "($fp, $len);";
-				}
+					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
+					           "ASSERT('$len == 0');";
 					break;
+				}
 
 				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-					commands = "ASSERT($wire == 5);\n"
+					commands = "ASSERT('$wire == 5');\n"
 					           "$this->" + var + " = read_zint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-					commands = "ASSERT($wire == 1);\n"
+					commands = "ASSERT('$wire == 1');\n"
 					           "$this->" + var + " = read_zint32($fp);\n"
 					           "$limit-=8;";
 					break;
@@ -348,7 +375,6 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
 
 			printer.Indent();
-
 			printer.Print(commands.c_str());
 			printer.Print("\nbreak;\n");
 			printer.Outdent();
