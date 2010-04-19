@@ -172,6 +172,8 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
 
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
+		vector<const FieldDescriptor *> required_fields;
+
 		// Print nested messages
 		for (int i = 0; i < message.nested_type_count(); ++i) {
 			printer.Print("\n");
@@ -211,9 +213,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		);
 		printer.Indent();
 
+
+
 		// Print fields map
 		/*
-		vector<const FieldDescriptor *> required_fields;
 		printer.Print(
 			"// Array maps field indexes to members\n"
 			"private static $_map = array (\n"
@@ -221,9 +224,6 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Indent();
                 for (int i = 0; i < message.field_count(); ++i) {
 			const FieldDescriptor &field ( *message.field(i) );
-
-			if (field.is_required())
-				required_fields.push_back( &field );
 
 			printer.Print("`index` => '`value`',\n",
 				"index", SimpleItoa(field.number()),
@@ -234,7 +234,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Print(");\n\n");
 		*/
 
-		printer.Print("private $_unknown = array();\n\n);
+		printer.Print("private $_unknown = array();\n\n");
 
 		// Constructor
 		printer.Print(
@@ -281,6 +281,8 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				var += "[]";
 			if (field.is_packable())
 				throw "Error we do not yet support packed values";
+			if (field.is_required())
+				required_fields.push_back( &field );
 
 			string commands;
 
