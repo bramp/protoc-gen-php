@@ -209,10 +209,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Print("class `name` {\n",
 		              "name", ClassName(message)
 		);
-
 		printer.Indent();
 
 		// Print fields map
+		/*
 		vector<const FieldDescriptor *> required_fields;
 		printer.Print(
 			"// Array maps field indexes to members\n"
@@ -232,11 +232,14 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		}
 		printer.Outdent();
 		printer.Print(");\n\n");
+		*/
+
+		printer.Print("private $_unknown = array();\n\n);
 
 		// Constructor
 		printer.Print(
 			"\n"
-			"function __construct($fp = NULL, $limit = PHP_INT_MAX) {\n"
+			"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
 			"  if($fp !== NULL)\n"
 			"    $this->read($fp, $limit);\n"
 			"}\n"
@@ -245,7 +248,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		// Read
 		printer.Print(
 			"\n"
-			"function read($fp, $limit = PHP_INT_MAX) {\n"
+			"function read($fp, &$limit = PHP_INT_MAX) {\n"
 		);
 		printer.Indent();
 
@@ -257,6 +260,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			"$wire  = $value & 0x07;\n"
 			"$field = $value >> 3;\n"
 			"var_dump(\"`name`: Found $field type \" . get_wiretype($wire));\n"
+			"var_dump(\"`name`: $limit bytes left\");\n"
 			"switch($field) {\n",
 			"name", ClassName(message)
 		);
@@ -328,13 +332,13 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
 					commands = "ASSERT('$wire == 0');\n"
-					           "$this->" + var + " = read_varint($fp, &$limit) > 0 ? true : false;";
+					           "$this->" + var + " = read_varint($fp, $limit) > 0 ? true : false;";
 					break;
 
 				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
 					commands = "ASSERT('$wire == 2');\n"
-					           "$len = read_varint($fp, &$limit);\n"
+					           "$len = read_varint($fp, $limit);\n"
 					           "$this->" + var + " = fread($fp, $len);\n"
 					           "$limit-=$len;";
 					break;
@@ -342,14 +346,14 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
 					const Descriptor & d( *field.message_type() );
 					commands = "ASSERT('$wire == 3');\n"
-					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$limit);";
+					           "$this->" + var + " = new " + ClassName(d) + "($fp, $limit);";
 					break;
 				}
 
 				case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
 					const Descriptor & d( *field.message_type() );
 					commands = "ASSERT('$wire == 2');\n"
-					           "$len = read_varint($fp, &$limit);\n"
+					           "$len = read_varint($fp, $limit);\n"
 					           "$limit-=$len;\n"
 					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
 					           "ASSERT('$len == 0');";
@@ -380,7 +384,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			printer.Outdent();
 		}
 
-		printer.Print( // TODO Store the unknown field
+		printer.Print(
 			"default:\n"
 			"  $limit -= skip($fp, $wire);\n"
 			"  var_dump(\"`name`: Skipped $field\");",
