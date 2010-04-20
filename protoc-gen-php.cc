@@ -172,375 +172,375 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
 
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
-		bool php_skip_unknown = false; // TODO get this from an option
-		vector<const FieldDescriptor *> required_fields;
+	bool php_skip_unknown = false; // TODO get this from an option
+	vector<const FieldDescriptor *> required_fields;
 
-		// Print nested messages
-		for (int i = 0; i < message.nested_type_count(); ++i) {
-			printer.Print("\n");
-			PrintMessage(printer, *message.nested_type(i));
-		}
+	// Print nested messages
+	for (int i = 0; i < message.nested_type_count(); ++i) {
+		printer.Print("\n");
+		PrintMessage(printer, *message.nested_type(i));
+	}
 
-		// Print nested enum
-		for (int i = 0; i < message.enum_type_count(); ++i) {
-			PrintEnum(printer, *message.enum_type(i) );
-		}
+	// Print nested enum
+	for (int i = 0; i < message.enum_type_count(); ++i) {
+		PrintEnum(printer, *message.enum_type(i) );
+	}
 
-		// Find out if we are a nested type, if so what kind
-		const FieldDescriptor * parentField = NULL;
-		const char * type = "message";
-		if (message.containing_type() != NULL) {
-			const Descriptor & parent ( *message.containing_type() );
+	// Find out if we are a nested type, if so what kind
+	const FieldDescriptor * parentField = NULL;
+	const char * type = "message";
+	if (message.containing_type() != NULL) {
+		const Descriptor & parent ( *message.containing_type() );
 
-			// Find which field we are
-			for (int i = 0; i < parent.field_count(); ++i) {
-				if (parent.field(i)->message_type() == &message) {
-					parentField = parent.field(i);
-					break;
-				}
+		// Find which field we are
+		for (int i = 0; i < parent.field_count(); ++i) {
+			if (parent.field(i)->message_type() == &message) {
+				parentField = parent.field(i);
+				break;
 			}
-			if (parentField->type() == FieldDescriptor::TYPE_GROUP)
-				type = "group";
+		}
+		if (parentField->type() == FieldDescriptor::TYPE_GROUP)
+			type = "group";
+	}
+
+	// Start printing the message
+	printer.Print("// `type` `full_name`\n",
+				  "type", type,
+				  "full_name", message.full_name()
+	);
+
+	printer.Print("class `name` {\n",
+				  "name", ClassName(message)
+	);
+	printer.Indent();
+
+	// Print fields map
+	/*
+	printer.Print(
+		"// Array maps field indexes to members\n"
+		"private static $_map = array (\n"
+	);
+	printer.Indent();
+			for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
+
+		printer.Print("`index` => '`value`',\n",
+			"index", SimpleItoa(field.number()),
+			"value", VariableName(field)
+		);
+	}
+	printer.Outdent();
+	printer.Print(");\n\n");
+	*/
+	if (!php_skip_unknown)
+		printer.Print("private $_unknown;\n\n");
+
+	// Constructor
+	printer.Print(
+		"\n"
+		"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
+		"  if($fp !== NULL)\n"
+		"    $this->read($fp, $limit);\n"
+		"}\n"
+	);
+
+	// Read
+	printer.Print(
+		"\n"
+		"function read($fp, &$limit = PHP_INT_MAX) {\n"
+	);
+	printer.Indent();
+
+	printer.Print("while(!feof($fp) && $limit > 0) {\n");
+	printer.Indent();
+
+	printer.Print(
+		"$value = Protobuf::read_varint($fp, &$limit);\n"
+		"$wire  = $value & 0x07;\n"
+		"$field = $value >> 3;\n"
+		"var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
+		"switch($field) {\n",
+		"name", ClassName(message)
+	);
+	printer.Indent();
+
+	// If we are a group message, we need to add a end group case
+	if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
+		printer.Print("case `index`:\n", "index", SimpleItoa(parentField->number()) );
+		printer.Print( "  ASSERT('$wire == 4');\n"
+					   "  break 2;\n");
+	}
+
+	for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
+
+		string var ( VariableName(field) );
+		if (field.is_repeated())
+			var += "[]";
+		if (field.is_packable())
+			throw "Error we do not yet support packed values";
+		if (field.is_required())
+			required_fields.push_back( &field );
+
+		string commands;
+
+		switch (field.type()) {
+			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->" + var + " = Protobuf::read_double($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->" + var + " = Protobuf::read_float($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
+			case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
+			case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
+			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
+			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
+				commands = "ASSERT('$wire == 0');\n"
+						   "$this->" + var + " = Protobuf::read_varint($fp, &$limit);";
+				break;
+
+			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->" + var + " = Protobuf::read_uint64($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->" + var + " = Protobuf::read_int64($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->" + var + " = Protobuf::read_uint32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->" + var + " = Protobuf::read_int32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
+				commands = "ASSERT('$wire == 0');\n"
+						   "$this->" + var + " = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
+				break;
+
+			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
+			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
+				commands = "ASSERT('$wire == 2');\n"
+						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$this->" + var + " = fread($fp, $len);\n"
+						   "$limit-=$len;";
+				break;
+
+			case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
+				const Descriptor & d( *field.message_type() );
+				commands = "ASSERT('$wire == 3');\n"
+						   "$this->" + var + " = new " + ClassName(d) + "($fp, $limit);";
+				break;
+			}
+
+			case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
+				const Descriptor & d( *field.message_type() );
+				commands = "ASSERT('$wire == 2');\n"
+						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$limit-=$len;\n"
+						   "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
+						   "ASSERT('$len == 0');";
+				break;
+			}
+
+			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->" + var + " = Protobuf::read_zint32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->" + var + " = Protobuf::read_zint32($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			default:
+				throw "Error: Unsupported type";// TODO use the proper exception
 		}
 
-		// Start printing the message
-		printer.Print("// `type` `full_name`\n",
-		              "type", type,
-		              "full_name", message.full_name()
-		);
+		printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
 
-		printer.Print("class `name` {\n",
-		              "name", ClassName(message)
-		);
 		printer.Indent();
-
-		// Print fields map
-		/*
-		printer.Print(
-			"// Array maps field indexes to members\n"
-			"private static $_map = array (\n"
-		);
-		printer.Indent();
-                for (int i = 0; i < message.field_count(); ++i) {
-			const FieldDescriptor &field ( *message.field(i) );
-
-			printer.Print("`index` => '`value`',\n",
-				"index", SimpleItoa(field.number()),
-				"value", VariableName(field)
-			);
-		}
+		printer.Print(commands.c_str());
+		printer.Print("\nbreak;\n");
 		printer.Outdent();
-		printer.Print(");\n\n");
-		*/
-		if (!php_skip_unknown)
-			printer.Print("private $_unknown;\n\n");
+	}
 
-		// Constructor
+	if (php_skip_unknown) {
 		printer.Print(
-			"\n"
-			"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
-			"  if($fp !== NULL)\n"
-			"    $this->read($fp, $limit);\n"
-			"}\n"
-		);
-
-		// Read
-		printer.Print(
-			"\n"
-			"function read($fp, &$limit = PHP_INT_MAX) {\n"
-		);
-		printer.Indent();
-
-		printer.Print("while(!feof($fp) && $limit > 0) {\n");
-		printer.Indent();
-
-		printer.Print(
-			"$value = Protobuf::read_varint($fp, &$limit);\n"
-			"$wire  = $value & 0x07;\n"
-			"$field = $value >> 3;\n"
-			"var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
-			"switch($field) {\n",
+			"default:\n"
+			"  $limit -= Protobuf::skip($fp, $wire);\n",
 			"name", ClassName(message)
 		);
-		printer.Indent();
+	} else {
+		printer.Print(
+			"default:\n"
+			"  $this->_unknown[$field] = Protobuf::read_unknown($fp, $wire, $limit);\n",
+			"name", ClassName(message)
+		);
+	}
 
-		// If we are a group message, we need to add a end group case
-		if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
-			printer.Print("case `index`:\n", "index", SimpleItoa(parentField->number()) );
-			printer.Print( "  ASSERT('$wire == 4');\n"
-			               "  break 2;\n");
+	printer.Outdent();
+	printer.Outdent();
+	printer.Print(
+		"  }\n" // switch
+		"}\n"   // while
+	);
+
+	printer.Outdent();
+
+	printer.Print(
+		"if (!$this->validateRequired())\n"
+		"  throw new Exception('Required fields are missing');\n"
+		"}\n"
+	);
+
+	// Write
+	printer.Print(
+		"\n"
+		"function write($fp, $limit = PHP_INT_MAX) {\n"
+	);
+	printer.Indent();
+
+	printer.Outdent();
+	printer.Print("}\n");
+
+
+	// Validate that the required fields are included
+	printer.Print(
+		"\n"
+		"public function validateRequired() {\n"
+	);
+	printer.Indent();
+	for (int i = 0; i < required_fields.size(); ++i) {
+		printer.Print("if ($this->`name` === null) return false;\n",
+			"name", VariableName(*required_fields[i])
+		);
+	}
+	printer.Print("return true;\n");
+	printer.Outdent();
+	printer.Print("}\n");
+
+	// Print a toString method
+	printer.Print(
+		"\n"
+		"public function __toString() {\n"
+		"  return ''"
+	);
+	printer.Indent();
+	for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
+		//printer.Print("\n     . '\"`name`\"=>\"' . Protobuf::toString($this->`name`) . \"\\\"\\n\"",
+		//		"name", VariableName(field)
+		//);
+		printer.Print("\n     . Protobuf::toString(\"`name`\", $this->`name`, `type`)",
+			"name", VariableName(field),
+			"type", SimpleItoa(field.type())
+		);
+	}
+	printer.Print(";\n");
+	printer.Outdent();
+	printer.Print("}\n");
+
+	// Print fields variables and methods
+	for (int i = 0; i < message.field_count(); ++i) {
+		printer.Print("\n");
+
+		const FieldDescriptor &field ( *message.field(i) );
+
+		map<string, string> variables;
+		variables["name"]             = VariableName(field);
+		variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
+		variables["default"]          = DefaultValueAsString(field, true);
+		variables["comment"]          = field.DebugString();
+
+		if (field.type() == FieldDescriptor::TYPE_GROUP) {
+			size_t p = variables["comment"].find ('{');
+			if (p != string::npos)
+				variables["comment"].resize (p - 1);
 		}
 
-		for (int i = 0; i < message.field_count(); ++i) {
-			const FieldDescriptor &field ( *message.field(i) );
+		// TODO Check that comment is a single line
 
-			string var ( VariableName(field) );
-			if (field.is_repeated())
-				var += "[]";
-			if (field.is_packable())
-				throw "Error we do not yet support packed values";
-			if (field.is_required())
-				required_fields.push_back( &field );
+		switch (field.type()) {
+//			If its a enum we should store it as a int
+//			case FieldDescriptor::TYPE_ENUM:
+//				variables["type"] = field.enum_type()->name() + " ";
+//				break;
 
-			string commands;
+			case FieldDescriptor::TYPE_MESSAGE:
+			case FieldDescriptor::TYPE_GROUP:
+				variables["type"] = ClassName(*field.message_type()) + " ";
+				break;
 
-			switch (field.type()) {
-				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = Protobuf::read_double($fp);\n"
-					           "$limit-=8;";
-					break;
-
-				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = Protobuf::read_float($fp);\n"
-					           "$limit-=4;";
-					break;
-
-				case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
-				case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
-				case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
-				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
-				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-					commands = "ASSERT('$wire == 0');\n"
-					           "$this->" + var + " = Protobuf::read_varint($fp, &$limit);";
-					break;
-
-				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = Protobuf::read_uint64($fp);\n"
-					           "$limit-=8;";
-					break;
-
-				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = Protobuf::read_int64($fp);\n"
-					           "$limit-=8;";
-					break;
-
-				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = Protobuf::read_uint32($fp);\n"
-					           "$limit-=4;";
-					break;
-
-				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = Protobuf::read_int32($fp);\n"
-					           "$limit-=4;";
-					break;
-
-				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-					commands = "ASSERT('$wire == 0');\n"
-					           "$this->" + var + " = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
-					break;
-
-				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
-				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-					commands = "ASSERT('$wire == 2');\n"
-					           "$len = Protobuf::read_varint($fp, $limit);\n"
-					           "$this->" + var + " = fread($fp, $len);\n"
-					           "$limit-=$len;";
-					break;
-
-				case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
-					const Descriptor & d( *field.message_type() );
-					commands = "ASSERT('$wire == 3');\n"
-					           "$this->" + var + " = new " + ClassName(d) + "($fp, $limit);";
-					break;
-				}
-
-				case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
-					const Descriptor & d( *field.message_type() );
-					commands = "ASSERT('$wire == 2');\n"
-					           "$len = Protobuf::read_varint($fp, $limit);\n"
-					           "$limit-=$len;\n"
-					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
-					           "ASSERT('$len == 0');";
-					break;
-				}
-
-				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = Protobuf::read_zint32($fp);\n"
-					           "$limit-=4;";
-					break;
-
-				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = Protobuf::read_zint32($fp);\n"
-					           "$limit-=8;";
-					break;
-
-				default:
-					throw "Error: Unsupported type";// TODO use the proper exception
-			}
-
-			printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
-
-			printer.Indent();
-			printer.Print(commands.c_str());
-			printer.Print("\nbreak;\n");
-			printer.Outdent();
+			default:
+				variables["type"] = "";
 		}
 
-		if (php_skip_unknown) {
-			printer.Print(
-				"default:\n"
-				"  $limit -= Protobuf::skip($fp, $wire);\n",
-				"name", ClassName(message)
+		if (field.is_repeated()) {
+			// Repeated field
+			printer.Print(variables,
+				"// `comment`\n"
+				"private $`name` = null;\n"
+				"public function clear`capitalized_name`() { $this->`name` = null; }\n"
+
+				"public function get`capitalized_name`Count() { if ($this->`name` === null ) return 0; else return count($this->`name`); }\n"
+				"public function get`capitalized_name`($index) { return $this->`name`[$index]; }\n"
+				"public function get`capitalized_name`Array() { if ($this->`name` === null ) return array(); else return $this->`name`; }\n"
 			);
+
+			// TODO Change the set code to validate input depending on the variable type
+			printer.Print(variables,
+				"public function set`capitalized_name`($index, $value) {$this->`name`[$index] = $value;	}\n"
+				"public function add`capitalized_name`($value) { $this->`name`[] = $value; }\n"
+				"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
+			);
+
 		} else {
-			printer.Print(
-				"default:\n"
-				"  $this->_unknown[$field] = Protobuf::read_unknown($fp, $wire, $limit);\n",
-				"name", ClassName(message)
+			// Non repeated field
+			printer.Print(variables,
+				"// `comment`\n"
+				"private $`name` = null;\n"
+				"public function clear`capitalized_name`() { $this->`name` = null; }\n"
+				"public function has`capitalized_name`() { return $this->`name` !== null; }\n"
+
+				"public function get`capitalized_name`() { if($this->`name` === null) return `default`; else return $this->`name`; }\n"
+			);
+
+			// TODO Change the set code to validate input depending on the variable type
+			printer.Print(variables,
+				"public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n"
 			);
 		}
-
-		printer.Outdent();
-		printer.Outdent();
-		printer.Print(
-			"  }\n" // switch
-			"}\n"   // while
-		);
-
-		printer.Outdent();
-
-		printer.Print(
-			"if (!$this->validateRequired())\n"
-			"  throw new Exception('Required fields are missing');\n"
-			"}\n"
-		);
-
-		// Write
-		printer.Print(
-			"\n"
-			"function write($fp, $limit = PHP_INT_MAX) {\n"
-		);
-		printer.Indent();
-
-		printer.Outdent();
-		printer.Print("}\n");
-
-
-		// Validate that the required fields are included
-		printer.Print(
-			"\n"
-			"public function validateRequired() {\n"
-		);
-		printer.Indent();
-		for (int i = 0; i < required_fields.size(); ++i) {
-			printer.Print("if ($this->`name` === null) return false;\n",
-				"name", VariableName(*required_fields[i])
-			);
-		}
-		printer.Print("return true;\n");
-		printer.Outdent();
-		printer.Print("}\n");
-
-		// Print a toString method
-		printer.Print(
-			"\n"
-			"public function __toString() {\n"
-			"  return ''"
-		);
-		printer.Indent();
-		for (int i = 0; i < message.field_count(); ++i) {
-			const FieldDescriptor &field ( *message.field(i) );
-			//printer.Print("\n     . '\"`name`\"=>\"' . Protobuf::toString($this->`name`) . \"\\\"\\n\"",
-			//		"name", VariableName(field)
-			//);
-			printer.Print("\n     . Protobuf::toString(\"`name`\", $this->`name`, `type`)",
-				"name", VariableName(field),
-				"type", SimpleItoa(field.type())
-			);
-		}
-		printer.Print(";\n");
-		printer.Outdent();
-		printer.Print("}\n");
-
-		// Print fields variables and methods
-		for (int i = 0; i < message.field_count(); ++i) {
-			printer.Print("\n");
-
-			const FieldDescriptor &field ( *message.field(i) );
-
-			map<string, string> variables;
-			variables["name"]             = VariableName(field);
-			variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
-			variables["default"]          = DefaultValueAsString(field, true);
-			variables["comment"]          = field.DebugString();
-
-			if (field.type() == FieldDescriptor::TYPE_GROUP) {
-				size_t p = variables["comment"].find ('{');
-				if (p != string::npos)
-					variables["comment"].resize (p - 1);
 			}
 
-			// TODO Check that comment is a single line
+	// Class Insertion Point
+	printer.Print(
+		"\n"
+		"// @@protoc_insertion_point(class_scope:`full_name`)\n",
+		"full_name", message.full_name()
+	);
 
-			switch (field.type()) {
-//				If its a enum we should store it as a int
-//				case FieldDescriptor::TYPE_ENUM:
-//					variables["type"] = field.enum_type()->name() + " ";
-//					break;
-
-				case FieldDescriptor::TYPE_MESSAGE:
-				case FieldDescriptor::TYPE_GROUP:
-					variables["type"] = ClassName(*field.message_type()) + " ";
-					break;
-
-				default:
-					variables["type"] = "";
-			}
-
-			if (field.is_repeated()) {
-				// Repeated field
-				printer.Print(variables,
-					"// `comment`\n"
-					"private $`name` = null;\n"
-					"public function clear`capitalized_name`() { $this->`name` = null; }\n"
-
-					"public function get`capitalized_name`Count() { if ($this->`name` === null ) return 0; else return count($this->`name`); }\n"
-					"public function get`capitalized_name`($index) { return $this->`name`[$index]; }\n"
-					"public function get`capitalized_name`Array() { if ($this->`name` === null ) return array(); else return $this->`name`; }\n"
-				);
-
-				// TODO Change the set code to validate input depending on the variable type
-				printer.Print(variables,
-					"public function set`capitalized_name`($index, $value) {$this->`name`[$index] = $value;	}\n"
-					"public function add`capitalized_name`($value) { $this->`name`[] = $value; }\n"
-					"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
-				);
-
-			} else {
-				// Non repeated field
-				printer.Print(variables,
-					"// `comment`\n"
-					"private $`name` = null;\n"
-					"public function clear`capitalized_name`() { $this->`name` = null; }\n"
-					"public function has`capitalized_name`() { return $this->`name` !== null; }\n"
-
-					"public function get`capitalized_name`() { if($this->`name` === null) return `default`; else return $this->`name`; }\n"
-				);
-
-				// TODO Change the set code to validate input depending on the variable type
-				printer.Print(variables,
-					"public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n"
-				);
-			}
-                }
-
-		// Class Insertion Point
-		printer.Print(
-			"\n"
-			"// @@protoc_insertion_point(class_scope:`full_name`)\n",
-			"full_name", message.full_name()
-		);
-
-		printer.Outdent();
-		printer.Print("}\n\n");
+	printer.Outdent();
+	printer.Print("}\n\n");
 }
 
 void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e) const {
