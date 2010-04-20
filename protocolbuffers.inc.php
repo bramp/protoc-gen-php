@@ -1,9 +1,43 @@
 <?php
 
+/**
+ * Class to aid in the parsing and creating of Protocol Buffer Messages
+ * This class should be included by the developer before they use a
+ * generated protobuf class.
+ *
+ * @author Andrew Brampton
+ *
+ */
+class Protobuf {
+
+	const TYPE_DOUBLE   = 1;   // double, exactly eight bytes on the wire.
+	const TYPE_FLOAT    = 2;   // float, exactly four bytes on the wire.
+	const TYPE_INT64    = 3;   // int64, varint on the wire.  Negative numbers
+                               // take 10 bytes.  Use TYPE_SINT64 if negative
+                               // values are likely.
+	const TYPE_UINT64   = 4;   // uint64, varint on the wire.
+	const TYPE_INT32    = 5;   // int32, varint on the wire.  Negative numbers
+                               // take 10 bytes.  Use TYPE_SINT32 if negative
+                               // values are likely.
+	const TYPE_FIXED64  = 6;   // uint64, exactly eight bytes on the wire.
+	const TYPE_FIXED32  = 7;   // uint32, exactly four bytes on the wire.
+	const TYPE_BOOL     = 8;   // bool, varint on the wire.
+	const TYPE_STRING   = 9;   // UTF-8 text.
+	const TYPE_GROUP    = 10;  // Tag-delimited message.  Deprecated.
+	const TYPE_MESSAGE  = 11;  // Length-delimited message.
+
+	const TYPE_BYTES    = 12;  // Arbitrary byte array.
+	const TYPE_UINT32   = 13;  // uint32, varint on the wire
+	const TYPE_ENUM     = 14;  // Enum, varint on the wire
+	const TYPE_SFIXED32 = 15;  // int32, exactly four bytes on the wire
+	const TYPE_SFIXED64 = 16;  // int64, exactly eight bytes on the wire
+	const TYPE_SINT32   = 17;  // int32, ZigZag-encoded varint on the wire
+	const TYPE_SINT64   = 18;  // int64, ZigZag-encoded varint on the wire
+
 	/**
 	 * Returns a string representing this wiretype
 	 */
-	function get_wiretype($wire_type) {
+	public static function get_wiretype($wire_type) {
 		switch ($wire_type) {
 			case 0: return 'varint';
 			case 1: return '64-bit';
@@ -15,7 +49,7 @@
 		}
 	}
 
-	function skip_varint($fp) {
+	public static function skip_varint($fp) {
 		$len = 0;
 		do { // Keep reading until we find the last byte
 			$b = fread($fp, 1);
@@ -26,7 +60,7 @@
 		return $len;
 	}
 
-	function read_varint($fp, &$limit = null) {
+	public static function read_varint($fp, &$limit = null) {
 		$value = '';
 		$len = 0;
 		do { // Keep reading until we find the last byte
@@ -51,10 +85,10 @@
 		return $i;
 	}
 
-	function skip($fp, $wire_type) {
+	public static function skip($fp, $wire_type) {
 		switch ($wire_type) {
 			case 0: // varint
-				return skip_varint($fp);
+				return Protobuf::skip_varint($fp);
 
 			case 1: // 64bit
 				if (fseek($fp, 8, SEEK_CUR) === -1)
@@ -63,7 +97,7 @@
 
 			case 2: // length delimited
 				$varlen = 0;
-				$len = read_varint($fp, &$varlen);
+				$len = Protobuf::read_varint($fp, &$varlen);
 				if (fseek($fp, $len, SEEK_CUR) === -1)
 					throw new Exception('skip(' . get_wiretype(2) . '): Error seeking');
 				return $len - $varlen;
@@ -83,38 +117,101 @@
 		}
 	}
 
-	$varint_tests  = array(
-		1   => "\x01",
-		2   => "\x02",
-		127 => "\x7F",
-		128 => "\x80\x01",
-		300 => "\xAC\x02",
-	);
+	public static function read_unknown($fp, $wire_type, &$limit = null) {
+		switch ($wire_type) {
+			case 0: // varint
+				return Protobuf::read_varint($fp, $limit);
 
-	function test_varint() {
-		global $varint_tests;
+			case 1: // 64bit
+				$limit -= 8;
+				return fread($fp, 8);
 
-		$fp = fopen('php://memory', 'r+b');
-		if ($fp === false)
-			exit('Unable to open stream');
+			case 2: // length delimited
+				$len = Protobuf::read_varint($fp, $limit);
+				$limit -= $len;
+				return fread($fp, $len);
 
-		foreach ($varint_tests as $i => $enc) {
+			//case 3: // Start group TODO we must keep looping until we find the closing end grou
 
-			// Write the answer into the buffer
-			fwrite($fp, $enc);
-			fseek($fp, 0, SEEK_SET);
+			//case 4: // End group - We should never skip a end group!
+			//	return 0; // Do nothing
 
-			$a = read_varint($fp);
-			if ($a != $i)
-				exit("Failed to decode varint($i) got $a\n");
+			case 5: // 32bit
+				$limit -= 4;
+				return fread($fp, 4);
 
-			$len = write_varint($fp, $i);
-			fseek($fp, 0, SEEK_SET);
-
-			echo "$i OK\n";
+			default:
+				throw new Exception('read_unknown('. get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
-		fclose($fp);
 	}
+
+
+	/**
+	 * Used to aid in pretty printing of Protobuf objects
+	 */
+	private static $print_depth = 0;
+	private static $indent_char = "\t";
+
+	public static function toString($key, $value, $type) {
+		$ret = str_repeat(self::$indent_char, self::$print_depth) . "$key=>";
+		if (is_array($value)) {
+			$ret .= "array(\n";
+			self::$print_depth++;
+			foreach($value as $i => $v)
+				$ret .= self::toString("[$i]", $v, $type);
+			self::$print_depth--;
+			$ret .= str_repeat(self::$indent_char, self::$print_depth) . ")\n";
+		} else {
+			if ($type == self::TYPE_BYTES)
+				$ret .= "\"...\"";
+			else {
+				if (is_object($value)) {
+					self::$print_depth++;
+					$ret .= get_class($value) . "(\n";
+					$ret .= $value->__toString() . "\n";
+					self::$print_depth--;
+					$ret .= str_repeat(self::$indent_char, self::$print_depth) . ")\n";
+				} else {
+					$ret .= '"' . (string)$value . "\"\n";
+				}
+			}
+		}
+		return $ret;
+	}
+}
+
+$varint_tests  = array(
+	1   => "\x01",
+	2   => "\x02",
+	127 => "\x7F",
+	128 => "\x80\x01",
+	300 => "\xAC\x02",
+);
+
+function test_varint() {
+	global $varint_tests;
+
+	$fp = fopen('php://memory', 'r+b');
+	if ($fp === false)
+		exit('Unable to open stream');
+
+	foreach ($varint_tests as $i => $enc) {
+
+		// Write the answer into the buffer
+		fwrite($fp, $enc);
+		fseek($fp, 0, SEEK_SET);
+
+		$a = Protobuf::read_varint($fp);
+		if ($a != $i)
+			exit("Failed to decode varint($i) got $a\n");
+
+		$len = Protobuf::write_varint($fp, $i);
+		fseek($fp, 0, SEEK_SET);
+
+		echo "$i OK\n";
+	}
+	fclose($fp);
+}
 
 //	test_varint();
 ?>

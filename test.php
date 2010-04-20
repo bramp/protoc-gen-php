@@ -18,7 +18,7 @@
 
 		$m = new Response($fp);
 
-		var_dump($m);
+		echo $m;
 
 		fclose($fp);
 

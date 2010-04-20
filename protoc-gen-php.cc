@@ -5,7 +5,7 @@
  * TODO
  *  Support the packed option
  *  Merge multiple messages
- *  Lots of optomisations
+ *  Lots of optimisations
  *  Track unknown fields?
  *  Support the deprecated groups encoding
  *  Extensions
@@ -172,6 +172,7 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
 
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
 
+		bool php_skip_unknown = false; // TODO get this from an option
 		vector<const FieldDescriptor *> required_fields;
 
 		// Print nested messages
@@ -213,8 +214,6 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		);
 		printer.Indent();
 
-
-
 		// Print fields map
 		/*
 		printer.Print(
@@ -233,8 +232,8 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Outdent();
 		printer.Print(");\n\n");
 		*/
-
-		printer.Print("private $_unknown = array();\n\n");
+		if (!php_skip_unknown)
+			printer.Print("private $_unknown;\n\n");
 
 		// Constructor
 		printer.Print(
@@ -256,11 +255,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Indent();
 
 		printer.Print(
-			"$value = read_varint($fp, &$limit);\n"
+			"$value = Protobuf::read_varint($fp, &$limit);\n"
 			"$wire  = $value & 0x07;\n"
 			"$field = $value >> 3;\n"
-			"var_dump(\"`name`: Found $field type \" . get_wiretype($wire));\n"
-			"var_dump(\"`name`: $limit bytes left\");\n"
+			"var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
 			"switch($field) {\n",
 			"name", ClassName(message)
 		);
@@ -270,7 +268,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
 			printer.Print("case `index`:\n", "index", SimpleItoa(parentField->number()) );
 			printer.Print( "  ASSERT('$wire == 4');\n"
-			               "  return;\n");
+			               "  break 2;\n");
 		}
 
 		for (int i = 0; i < message.field_count(); ++i) {
@@ -289,13 +287,13 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			switch (field.type()) {
 				case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
 					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = read_double($fp);\n"
+					           "$this->" + var + " = Protobuf::read_double($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
 					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = read_float($fp);\n"
+					           "$this->" + var + " = Protobuf::read_float($fp);\n"
 					           "$limit-=4;";
 					break;
 
@@ -305,42 +303,42 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 				case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
 					commands = "ASSERT('$wire == 0');\n"
-					           "$this->" + var + " = read_varint($fp, &$limit);";
+					           "$this->" + var + " = Protobuf::read_varint($fp, &$limit);";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
 					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = read_uint64($fp);\n"
+					           "$this->" + var + " = Protobuf::read_uint64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
 					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = read_int64($fp);\n"
+					           "$this->" + var + " = Protobuf::read_int64($fp);\n"
 					           "$limit-=8;";
 					break;
 
 				case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
 					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = read_uint32($fp);\n"
+					           "$this->" + var + " = Protobuf::read_uint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
 					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = read_int32($fp);\n"
+					           "$this->" + var + " = Protobuf::read_int32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
 					commands = "ASSERT('$wire == 0');\n"
-					           "$this->" + var + " = read_varint($fp, $limit) > 0 ? true : false;";
+					           "$this->" + var + " = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
 					break;
 
 				case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 				case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
 					commands = "ASSERT('$wire == 2');\n"
-					           "$len = read_varint($fp, $limit);\n"
+					           "$len = Protobuf::read_varint($fp, $limit);\n"
 					           "$this->" + var + " = fread($fp, $len);\n"
 					           "$limit-=$len;";
 					break;
@@ -355,7 +353,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 				case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
 					const Descriptor & d( *field.message_type() );
 					commands = "ASSERT('$wire == 2');\n"
-					           "$len = read_varint($fp, $limit);\n"
+					           "$len = Protobuf::read_varint($fp, $limit);\n"
 					           "$limit-=$len;\n"
 					           "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
 					           "ASSERT('$len == 0');";
@@ -364,13 +362,13 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 				case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
 					commands = "ASSERT('$wire == 5');\n"
-					           "$this->" + var + " = read_zint32($fp);\n"
+					           "$this->" + var + " = Protobuf::read_zint32($fp);\n"
 					           "$limit-=4;";
 					break;
 
 				case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
 					commands = "ASSERT('$wire == 1');\n"
-					           "$this->" + var + " = read_zint32($fp);\n"
+					           "$this->" + var + " = Protobuf::read_zint32($fp);\n"
 					           "$limit-=8;";
 					break;
 
@@ -386,22 +384,34 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 			printer.Outdent();
 		}
 
-		printer.Print(
-			"default:\n"
-			"  $limit -= skip($fp, $wire);\n"
-			"  var_dump(\"`name`: Skipped $field\");",
-			"name", ClassName(message)
-		);
+		if (php_skip_unknown) {
+			printer.Print(
+				"default:\n"
+				"  $limit -= Protobuf::skip($fp, $wire);\n",
+				"name", ClassName(message)
+			);
+		} else {
+			printer.Print(
+				"default:\n"
+				"  $this->_unknown[$field] = Protobuf::read_unknown($fp, $wire, $limit);\n",
+				"name", ClassName(message)
+			);
+		}
 
 		printer.Outdent();
 		printer.Outdent();
 		printer.Print(
-			"  }\n"
+			"  }\n" // switch
+			"}\n"   // while
+		);
+
+		printer.Outdent();
+
+		printer.Print(
+			"if (!$this->validateRequired())\n"
+			"  throw new Exception('Required fields are missing');\n"
 			"}\n"
 		);
-
-		printer.Outdent();
-		printer.Print("}\n");
 
 		// Write
 		printer.Print(
@@ -429,9 +439,30 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		printer.Outdent();
 		printer.Print("}\n");
 
+		// Print a toString method
+		printer.Print(
+			"\n"
+			"public function __toString() {\n"
+			"  return ''"
+		);
+		printer.Indent();
+		for (int i = 0; i < message.field_count(); ++i) {
+			const FieldDescriptor &field ( *message.field(i) );
+			//printer.Print("\n     . '\"`name`\"=>\"' . Protobuf::toString($this->`name`) . \"\\\"\\n\"",
+			//		"name", VariableName(field)
+			//);
+			printer.Print("\n     . Protobuf::toString(\"`name`\", $this->`name`, `type`)",
+				"name", VariableName(field),
+				"type", SimpleItoa(field.type())
+			);
+		}
+		printer.Print(";\n");
+		printer.Outdent();
+		printer.Print("}\n");
+
 		// Print fields variables and methods
-                for (int i = 0; i < message.field_count(); ++i) {
-                        printer.Print("\n");
+		for (int i = 0; i < message.field_count(); ++i) {
+			printer.Print("\n");
 
 			const FieldDescriptor &field ( *message.field(i) );
 
