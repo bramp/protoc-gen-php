@@ -49,14 +49,16 @@ class Protobuf {
 		}
 	}
 
-	public static function skip_varint($fp) {
+	/**
+	 * Returns how big (in bytes) this number would be as a varint
+	 */
+	public static function size_varint($i) {
 		$len = 0;
-		do { // Keep reading until we find the last byte
-			$b = fread($fp, 1);
-			if ($b === false)
-				throw new Exception("skip(varint): Error reading byte");
+		do {
+			$i = $i >> 7;
 			$len++;
-		} while ($b >= "\x80");
+		} while ($i != 0);
+		// TODO change this to use math not loops :)
 		return $len;
 	}
 
@@ -86,7 +88,7 @@ class Protobuf {
 
 		if ($limit !== null)
 			$limit -= $len;
-			
+
 		$i = 0;
 		$shift = 0;
 		for ($j = 0; $j < $len; $j++) {
@@ -97,7 +99,67 @@ class Protobuf {
 		return $i;
 	}
 
-	public static function skip($fp, $wire_type) {
+	public static function read_double($fp){throw "I've not coded it yet Exception";}
+	public static function read_float ($fp){throw "I've not coded it yet Exception";}
+	public static function read_uint64($fp){throw "I've not coded it yet Exception";}
+	public static function read_int64 ($fp){throw "I've not coded it yet Exception";}
+	public static function read_uint32($fp){throw "I've not coded it yet Exception";}
+	public static function read_int32 ($fp){throw "I've not coded it yet Exception";}
+	public static function read_zint32($fp){throw "I've not coded it yet Exception";}
+	public static function read_zint64($fp){throw "I've not coded it yet Exception";}
+
+	/**
+	 * Writes a varint to $fp
+	 * returns the number of bytes written
+	 * @param $fp
+	 * @param $i The int to encode
+	 * @return The number of bytes written
+	 */
+	public static function write_varint($fp, $i) {
+		$len = 0;
+		do {
+			$v = $i & 0x7F;
+			$i = $i >> 7;
+
+			if ($i != 0)
+				$v |= 0x80;
+
+			if (fwrite($fp, chr($v)) !== 1)
+				throw new Exception("write_varint(): Error writing byte");
+
+			$len++;
+		} while ($i != 0);
+
+		return $len;
+	}
+
+	public static function write_double($fp, $d){throw "I've not coded it yet Exception";}
+	public static function write_float ($fp, $f){throw "I've not coded it yet Exception";}
+	public static function write_uint64($fp, $i){throw "I've not coded it yet Exception";}
+	public static function write_int64 ($fp, $i){throw "I've not coded it yet Exception";}
+	public static function write_uint32($fp, $i){throw "I've not coded it yet Exception";}
+	public static function write_int32 ($fp, $i){throw "I've not coded it yet Exception";}
+	public static function write_zint32($fp, $i){throw "I've not coded it yet Exception";}
+	public static function write_zint64($fp, $i){throw "I've not coded it yet Exception";}
+
+	/**
+	 * Seek past a varint
+	 */
+	public static function skip_varint($fp) {
+		$len = 0;
+		do { // Keep reading until we find the last byte
+			$b = fread($fp, 1);
+			if ($b === false)
+				throw new Exception("skip(varint): Error reading byte");
+			$len++;
+		} while ($b >= "\x80");
+		return $len;
+	}
+
+	/**
+	 * Seek past the current field
+	 */
+	public static function skip_field($fp, $wire_type) {
 		switch ($wire_type) {
 			case 0: // varint
 				return Protobuf::skip_varint($fp);
@@ -129,7 +191,10 @@ class Protobuf {
 		}
 	}
 
-	public static function read_unknown($fp, $wire_type, &$limit = null) {
+	/**
+	 * Read a unknown field from the stream and return its raw bytes
+	 */
+	public static function read_field($fp, $wire_type, &$limit = null) {
 		switch ($wire_type) {
 			case 0: // varint
 				return Protobuf::read_varint($fp, $limit);
@@ -156,7 +221,6 @@ class Protobuf {
 				throw new Exception('read_unknown('. get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
 	}
-
 
 	/**
 	 * Used to aid in pretty printing of Protobuf objects
@@ -219,6 +283,7 @@ function test_varint() {
 	foreach ($varint_tests as $i => $enc) {
 
 		// Write the answer into the buffer
+		fseek($fp, 0, SEEK_SET);
 		fwrite($fp, $enc);
 		fseek($fp, 0, SEEK_SET);
 
@@ -228,8 +293,13 @@ function test_varint() {
 
 		$len = Protobuf::write_varint($fp, $i);
 		fseek($fp, 0, SEEK_SET);
+		$b = fread($fp, $len);
+		if ($b != $enc)
+			exit("Failed to encode varint($i)\n");
 
-		echo "$i OK\n";
+		$len = Protobuf::size_varint($i);
+
+		echo "$i len($len) OK\n";
 	}
 	fclose($fp);
 }

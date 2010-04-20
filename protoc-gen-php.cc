@@ -4,10 +4,7 @@
  *
  * TODO
  *  Support the packed option
- *  Merge multiple messages
  *  Lots of optimisations
- *  Track unknown fields?
- *  Support the deprecated groups encoding
  *  Extensions
  *  Services
  *  Packages
@@ -21,6 +18,7 @@
 #include <algorithm>
 
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/wire_format.h>
 
 #include <google/protobuf/compiler/plugin.h>
 #include <google/protobuf/compiler/code_generator.h>
@@ -31,6 +29,7 @@
 
 using namespace google::protobuf;
 using namespace google::protobuf::compiler;
+using namespace google::protobuf::internal;
 
 class PHPCodeGenerator : public CodeGenerator {
 	private:
@@ -45,6 +44,15 @@ class PHPCodeGenerator : public CodeGenerator {
 		void PrintServices  (io::Printer &printer, const FileDescriptor & file) const;
 
 		string DefaultValueAsString(const FieldDescriptor & field, bool quote_string_type) const;
+
+		// Print the read() method
+		void PrintMessageRead(io::Printer &printer, const Descriptor & message, vector<const FieldDescriptor *> & required_fields, const FieldDescriptor * parentField) const;
+
+		// Print the write() method
+		void PrintMessageWrite(io::Printer &printer, const Descriptor & message) const;
+
+		// Print the size() method
+		void PrintMessageSize(io::Printer &printer, const Descriptor & message) const;
 
 		// Maps names into PHP names
 		template <class DescriptorType>
@@ -169,81 +177,9 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
   return "";
 }
 
+bool php_skip_unknown = false; // TODO get this from an option
 
-void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
-
-	bool php_skip_unknown = false; // TODO get this from an option
-	vector<const FieldDescriptor *> required_fields;
-
-	// Print nested messages
-	for (int i = 0; i < message.nested_type_count(); ++i) {
-		printer.Print("\n");
-		PrintMessage(printer, *message.nested_type(i));
-	}
-
-	// Print nested enum
-	for (int i = 0; i < message.enum_type_count(); ++i) {
-		PrintEnum(printer, *message.enum_type(i) );
-	}
-
-	// Find out if we are a nested type, if so what kind
-	const FieldDescriptor * parentField = NULL;
-	const char * type = "message";
-	if (message.containing_type() != NULL) {
-		const Descriptor & parent ( *message.containing_type() );
-
-		// Find which field we are
-		for (int i = 0; i < parent.field_count(); ++i) {
-			if (parent.field(i)->message_type() == &message) {
-				parentField = parent.field(i);
-				break;
-			}
-		}
-		if (parentField->type() == FieldDescriptor::TYPE_GROUP)
-			type = "group";
-	}
-
-	// Start printing the message
-	printer.Print("// `type` `full_name`\n",
-				  "type", type,
-				  "full_name", message.full_name()
-	);
-
-	printer.Print("class `name` {\n",
-				  "name", ClassName(message)
-	);
-	printer.Indent();
-
-	// Print fields map
-	/*
-	printer.Print(
-		"// Array maps field indexes to members\n"
-		"private static $_map = array (\n"
-	);
-	printer.Indent();
-			for (int i = 0; i < message.field_count(); ++i) {
-		const FieldDescriptor &field ( *message.field(i) );
-
-		printer.Print("`index` => '`value`',\n",
-			"index", SimpleItoa(field.number()),
-			"value", VariableName(field)
-		);
-	}
-	printer.Outdent();
-	printer.Print(");\n\n");
-	*/
-	if (!php_skip_unknown)
-		printer.Print("private $_unknown;\n\n");
-
-	// Constructor
-	printer.Print(
-		"\n"
-		"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
-		"  if($fp !== NULL)\n"
-		"    $this->read($fp, $limit);\n"
-		"}\n"
-	);
-
+void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor & message, vector<const FieldDescriptor *> & required_fields, const FieldDescriptor * parentField) const {
 	// Read
 	printer.Print(
 		"\n"
@@ -255,10 +191,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	printer.Indent();
 
 	printer.Print(
-		"$value = Protobuf::read_varint($fp, &$limit);\n"
-		"if ($value === false) break;\n"
-		"$wire  = $value & 0x07;\n"
-		"$field = $value >> 3;\n"
+		"$tag = Protobuf::read_varint($fp, &$limit);\n"
+		"if ($tag === false) break;\n"
+		"$wire  = $tag & 0x07;\n"
+		"$field = $tag >> 3;\n"
 		"//var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
 		"switch($field) {\n",
 		"name", ClassName(message)
@@ -288,7 +224,169 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$this->" + var + " = Protobuf::read_double($fp);\n"
+						   "$this->`var` = Protobuf::read_double($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->`var` = Protobuf::read_float($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
+			case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
+			case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
+			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
+			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
+				commands = "ASSERT('$wire == 0');\n"
+						   "$this->`var` = Protobuf::read_varint($fp, &$limit);";
+				break;
+
+			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->`var` = Protobuf::read_uint64($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->`var` = Protobuf::read_int64($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->`var` = Protobuf::read_uint32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->`var` = Protobuf::read_int32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
+				commands = "ASSERT('$wire == 0');\n"
+						   "$this->`var` = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
+				break;
+
+			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
+			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
+				commands = "ASSERT('$wire == 2');\n"
+						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$this->`var` = fread($fp, $len);\n"
+						   "$limit-=$len;";
+				break;
+
+			case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
+				const Descriptor & d( *field.message_type() );
+				commands = "ASSERT('$wire == 3');\n"
+						   "$this->`var` = new " + ClassName(d) + "($fp, $limit);";
+				break;
+			}
+
+			case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
+				const Descriptor & d( *field.message_type() );
+				commands = "ASSERT('$wire == 2');\n"
+						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$limit-=$len;\n"
+						   "$this->`var` = new " + ClassName(d) + "($fp, &$len);\n"
+						   "ASSERT('$len == 0');";
+				break;
+			}
+
+			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
+				commands = "ASSERT('$wire == 5');\n"
+						   "$this->`var` = Protobuf::read_zint32($fp);\n"
+						   "$limit-=4;";
+				break;
+
+			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->`var` = Protobuf::read_zint64($fp);\n"
+						   "$limit-=8;";
+				break;
+
+			default:
+				throw "Error: Unsupported type";// TODO use the proper exception
+		}
+
+		printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
+
+		printer.Indent();
+		printer.Print(commands.c_str(), "var", var);
+		printer.Print("\nbreak;\n");
+		printer.Outdent();
+	}
+
+	if (php_skip_unknown) {
+		printer.Print(
+			"default:\n"
+			"  $limit -= Protobuf::skip_field($fp, $wire);\n",
+			"name", ClassName(message)
+		);
+	} else {
+		printer.Print(
+			"default:\n"
+			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_field($fp, $wire, $limit);\n",
+			"name", ClassName(message)
+		);
+	}
+
+	printer.Outdent();
+	printer.Outdent();
+	printer.Print(
+		"  }\n" // switch
+		"}\n"   // while
+	);
+
+	printer.Outdent();
+	printer.Print(
+		"  if (!$this->validateRequired())\n"
+		"    throw new Exception('Required fields are missing');\n"
+		"}\n"
+	);
+}
+
+void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message) const {
+/*
+	// Write
+	printer.Print(
+		"\n"
+		"function write($fp, $limit = PHP_INT_MAX) {\n"
+	);
+	printer.Indent();
+
+	printer.Print(
+		"if (!$this->validateRequired())\n"
+		"  throw new Exception('Required fields are missing');\n"
+		"}\n"
+	);
+
+	//"$wire  = $tag & 0x07;\n"
+	//"$field = $tag >> 3;\n"
+
+	for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
+
+		string var ( VariableName(field) );
+		if (field.is_repeated())
+			var += "[]";
+		if (field.is_packable())
+			throw "Error we do not yet support packed values";
+		if (field.is_required())
+			required_fields.push_back( &field );
+
+		int varint = (field.index() << 3) | wire;
+
+		string commands;
+
+		switch (field.type()) {
+			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
+				commands = "ASSERT('$wire == 1');\n"
+						   "$this->" + var + " = Protobuf::write_double($fp, $this->" + var + ");\n"
 						   "$limit-=8;";
 				break;
 
@@ -394,7 +492,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	} else {
 		printer.Print(
 			"default:\n"
-			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_unknown($fp, $wire, $limit);\n",
+			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_field($fp, $wire, $limit);\n",
 			"name", ClassName(message)
 		);
 	}
@@ -407,23 +505,186 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	);
 
 	printer.Outdent();
+	printer.Print("}\n");
+*/
+}
 
-	printer.Print(
-		"if (!$this->validateRequired())\n"
-		"  throw new Exception('Required fields are missing');\n"
-		"}\n"
-	);
+unsigned int varint_size(int i) {
+	// TODO change this to use math not loops :)
+	unsigned int len = 1;
+	while (i >>= 7)
+		len++;
+	return len;
+}
 
-	// Write
+void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor & message) const {
+	// Print the calc size method
 	printer.Print(
 		"\n"
-		"function write($fp, $limit = PHP_INT_MAX) {\n"
+		"public function size() {\n"
+		"  $size = 0;\n"
+	);
+	printer.Indent();
+	for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
+
+		int tag = WireFormat::TagSize(field.number(), field.type()); // TODO check what this actually does!
+
+		string sizeCommand = "";
+
+		switch (WireFormat::WireTypeForField(&field)) {
+
+			case WireFormatLite::WIRETYPE_VARINT:
+				if (field.type() == FieldDescriptor::TYPE_BOOL) {
+					tag++; // A bool will always take 1 byte
+				} else {
+					sizeCommand += "$size += `tag` + Protobuf::size_varint(`var`);\n";
+				}
+				break;
+
+			case WireFormatLite::WIRETYPE_FIXED32:
+				tag += 4;
+				sizeCommand += "$size += `tag`;\n";
+				break;
+
+			case WireFormatLite::WIRETYPE_FIXED64:
+				tag += 8;
+				sizeCommand += "$size += `tag`;\n";
+				break;
+
+			case WireFormatLite::WIRETYPE_LENGTH_DELIMITED:
+			case WireFormatLite::WIRETYPE_START_GROUP:
+			case WireFormatLite::WIRETYPE_END_GROUP:
+
+				if (field.type() == FieldDescriptor::TYPE_MESSAGE || field.type() == FieldDescriptor::TYPE_GROUP) {
+					sizeCommand +=
+							"$l = `var`->size();\n"
+							"$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+				} else {
+					sizeCommand +=
+							"$l = strlen(`var`);\n"
+							"$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+				}
+				break;
+
+			default:
+				throw "Error: Unsupported wire type";// TODO use the proper exception
+		}
+
+		if (field.is_repeated()) {
+			printer.Print(
+				"if (!is_null($this->`var`))\n"
+				"  foreach($this->`var` as $v) {\n",
+				"var", VariableName(field)
+			);
+			printer.Indent(); printer.Indent();
+			printer.Print(
+				sizeCommand.c_str(),
+				"var", "$v",
+				"tag", SimpleItoa(tag)
+			);
+			printer.Outdent(); printer.Outdent();
+			printer.Print("  }\n");
+
+		} else {
+			printer.Print(
+				"if (!is_null($this->`var`)) {\n",
+				"var", VariableName(field)
+			);
+			printer.Indent();
+			printer.Print(
+				sizeCommand.c_str(),
+				"var", "$this->" + VariableName(field),
+				"tag", SimpleItoa(tag)
+			);
+			printer.Outdent();
+			printer.Print("}\n");
+		}
+	}
+	printer.Outdent();
+	printer.Print(
+		"  return $size;\n"
+		"}\n"
+	);
+}
+
+void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
+	vector<const FieldDescriptor *> required_fields;
+
+	// Print nested messages
+	for (int i = 0; i < message.nested_type_count(); ++i) {
+		printer.Print("\n");
+		PrintMessage(printer, *message.nested_type(i));
+	}
+
+	// Print nested enum
+	for (int i = 0; i < message.enum_type_count(); ++i) {
+		PrintEnum(printer, *message.enum_type(i) );
+	}
+
+	// Find out if we are a nested type, if so what kind
+	const FieldDescriptor * parentField = NULL;
+	const char * type = "message";
+	if (message.containing_type() != NULL) {
+		const Descriptor & parent ( *message.containing_type() );
+
+		// Find which field we are
+		for (int i = 0; i < parent.field_count(); ++i) {
+			if (parent.field(i)->message_type() == &message) {
+				parentField = parent.field(i);
+				break;
+			}
+		}
+		if (parentField->type() == FieldDescriptor::TYPE_GROUP)
+			type = "group";
+	}
+
+	// Start printing the message
+	printer.Print("// `type` `full_name`\n",
+				  "type", type,
+				  "full_name", message.full_name()
+	);
+
+	printer.Print("class `name` {\n",
+				  "name", ClassName(message)
 	);
 	printer.Indent();
 
-	printer.Outdent();
-	printer.Print("}\n");
+	// Print fields map
+	/*
+	printer.Print(
+		"// Array maps field indexes to members\n"
+		"private static $_map = array (\n"
+	);
+	printer.Indent();
+			for (int i = 0; i < message.field_count(); ++i) {
+		const FieldDescriptor &field ( *message.field(i) );
 
+		printer.Print("`index` => '`value`',\n",
+			"index", SimpleItoa(field.number()),
+			"value", VariableName(field)
+		);
+	}
+	printer.Outdent();
+	printer.Print(");\n\n");
+	*/
+	if (!php_skip_unknown)
+		printer.Print("private $_unknown;\n");
+
+	// Constructor
+	printer.Print(
+		"\n"
+		"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
+		"  if($fp !== NULL)\n"
+		"    $this->read($fp, $limit);\n"
+		"}\n"
+	);
+
+	// Print the read/write methods
+	PrintMessageRead(printer, message, required_fields, parentField);
+	PrintMessageWrite(printer, message);
+
+	PrintMessageSize(printer, message);
 
 	// Validate that the required fields are included
 	printer.Print(

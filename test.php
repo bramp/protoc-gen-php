@@ -20,6 +20,10 @@
 
 		echo $m;
 
+		$s = fstat($fp);
+		echo 'File size: ' . $s['size'] . "\n";
+		echo 'Response size: ' . $m->size() . "\n";
+
 		fclose($fp);
 
 	}
