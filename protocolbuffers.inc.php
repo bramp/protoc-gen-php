@@ -60,6 +60,10 @@ class Protobuf {
 		return $len;
 	}
 
+	/**
+	 * Tries to read a varint from $fp.
+	 * @returns the Varint from the stream, or false if the stream has reached eof.
+	 */
 	public static function read_varint($fp, &$limit = null) {
 		$value = '';
 		$len = 0;
@@ -67,14 +71,22 @@ class Protobuf {
 			$b = fread($fp, 1);
 			if ($b === false)
 				throw new Exception("read_varint(): Error reading byte");
+			if (strlen($b) < 1)
+				break;
 
 			$value .= $b;
 			$len++;
 		} while ($b >= "\x80");
 
+		if ($len == 0) {
+			if (feof($fp))
+				return false;
+			throw new Exception("read_varint(): Error reading byte");
+		}
+
 		if ($limit !== null)
 			$limit -= $len;
-
+			
 		$i = 0;
 		$shift = 0;
 		for ($j = 0; $j < $len; $j++) {
@@ -151,29 +163,38 @@ class Protobuf {
 	 */
 	private static $print_depth = 0;
 	private static $indent_char = "\t";
+	private static $print_limit = 50;
 
-	public static function toString($key, $value, $type) {
+	public static function toString($key, $value) {
+		if (is_null($value))
+			return;
 		$ret = str_repeat(self::$indent_char, self::$print_depth) . "$key=>";
 		if (is_array($value)) {
 			$ret .= "array(\n";
 			self::$print_depth++;
 			foreach($value as $i => $v)
-				$ret .= self::toString("[$i]", $v, $type);
+				$ret .= self::toString("[$i]", $v);
 			self::$print_depth--;
 			$ret .= str_repeat(self::$indent_char, self::$print_depth) . ")\n";
 		} else {
-			if ($type == self::TYPE_BYTES)
-				$ret .= "\"...\"";
-			else {
-				if (is_object($value)) {
-					self::$print_depth++;
-					$ret .= get_class($value) . "(\n";
-					$ret .= $value->__toString() . "\n";
-					self::$print_depth--;
-					$ret .= str_repeat(self::$indent_char, self::$print_depth) . ")\n";
-				} else {
-					$ret .= '"' . (string)$value . "\"\n";
+			if (is_object($value)) {
+				self::$print_depth++;
+				$ret .= get_class($value) . "(\n";
+				$ret .= $value->__toString() . "\n";
+				self::$print_depth--;
+				$ret .= str_repeat(self::$indent_char, self::$print_depth) . ")\n";
+			} elseif (is_string($value)) {
+				$safevalue = addcslashes($value, "\0..\37\177..\377");
+				if (strlen($safevalue) > self::$print_limit) {
+					$safevalue = substr($safevalue, 0, self::$print_limit) . '...';
 				}
+
+				$ret .= '"' . $safevalue . '" (' . strlen($value) . " bytes)\n";
+				
+			} elseif (is_bool($value)) {
+				$ret .= ($value ? 'true' : 'false') . "\n";
+			} else {
+				$ret .= (string)$value . "\n";
 			}
 		}
 		return $ret;

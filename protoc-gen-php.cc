@@ -256,9 +256,10 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 	printer.Print(
 		"$value = Protobuf::read_varint($fp, &$limit);\n"
+		"if ($value === false) break;\n"
 		"$wire  = $value & 0x07;\n"
 		"$field = $value >> 3;\n"
-		"var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
+		"//var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
 		"switch($field) {\n",
 		"name", ClassName(message)
 	);
@@ -393,7 +394,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	} else {
 		printer.Print(
 			"default:\n"
-			"  $this->_unknown[$field] = Protobuf::read_unknown($fp, $wire, $limit);\n",
+			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_unknown($fp, $wire, $limit);\n",
 			"name", ClassName(message)
 		);
 	}
@@ -446,15 +447,22 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		"  return ''"
 	);
 	printer.Indent();
+
+	if (!php_skip_unknown)
+		printer.Print("\n     . Protobuf::toString('unknown', $this->_unknown)");
+
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor &field ( *message.field(i) );
-		//printer.Print("\n     . '\"`name`\"=>\"' . Protobuf::toString($this->`name`) . \"\\\"\\n\"",
-		//		"name", VariableName(field)
-		//);
-		printer.Print("\n     . Protobuf::toString(\"`name`\", $this->`name`, `type`)",
-			"name", VariableName(field),
-			"type", SimpleItoa(field.type())
-		);
+		if (field.type() == FieldDescriptor::TYPE_ENUM) {
+			printer.Print("\n     . Protobuf::toString('`name`', `enum`::toString($this->`name`))",
+				"name", VariableName(field),
+				"enum", ClassName(*field.enum_type())
+			);
+		} else {
+			printer.Print("\n     . Protobuf::toString('`name`', $this->`name`)",
+				"name", VariableName(field)
+			);
+		}
 	}
 	printer.Print(";\n");
 	printer.Outdent();
@@ -545,29 +553,51 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e) const {
 
-		printer.Print("// enum `full_name`\n"
-		              "class `name` {\n",
-		              "full_name", e.full_name(),
-		              "name", ClassName(e)
+	printer.Print("// enum `full_name`\n"
+				  "class `name` {\n",
+				  "full_name", e.full_name(),
+				  "name", ClassName(e)
+	);
+
+	printer.Indent();
+
+	// Print fields
+	for (int j = 0; j < e.value_count(); ++j) {
+		const EnumValueDescriptor &value ( *e.value(j) );
+
+		printer.Print(
+			"const `name` = `number`;\n",
+			"name",   UpperString(value.name()),
+			"number", SimpleItoa(value.number())
 		);
+	}
 
-		printer.Indent();
+	// Print values array
+	printer.Print("\npublic static $_values = array(\n");
+	printer.Indent();
+	for (int j = 0; j < e.value_count(); ++j) {
+		const EnumValueDescriptor &value ( *e.value(j) );
 
-		// Print fields
-                for (int j = 0; j < e.value_count(); ++j) {
-			const EnumValueDescriptor &value ( *e.value(j) );
+		printer.Print(
+			"`number` => self::`name`,\n",
+			"number", SimpleItoa(value.number()),
+			"name",   UpperString(value.name())
+		);
+	}
+	printer.Outdent();
+	printer.Print(");\n\n");
 
-			map<string, string> variables;
-			variables["name"]   = UpperString(value.name());
-			variables["number"] = SimpleItoa(value.number());
+	// Print a toString
+	printer.Print(
+		"public static function toString($value) {\n"
+		"  if (array_key_exists($value, self::$_values))\n"
+		"    return self::$_values[$value];\n"
+		"  return 'UNKNOWN';\n"
+		"}\n"
+	);
 
-			printer.Print(variables,
-				"const `name` = `number`;\n");
-
-                }
-
-		printer.Outdent();
-		printer.Print("}\n\n");
+	printer.Outdent();
+	printer.Print("}\n\n");
 }
 
 void PHPCodeGenerator::PrintMessages(io::Printer &printer, const FileDescriptor & file) const {
@@ -620,9 +650,9 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 		return false;
 	}
 
-
 	return true;
 }
+
 
 int main(int argc, char* argv[]) {
 	PHPCodeGenerator generator;

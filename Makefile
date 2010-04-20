@@ -36,9 +36,11 @@ valgrind: all test
 
 TESTS = addressbook.proto market.proto
 
-test: all
+%.proto.php : %.proto $(MAIN)
+	$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
+
+test: $(TESTS:.proto=.proto.php)
 	for file in $(TESTS); do \
-		$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $${file}; \
 		echo | cat -n $${file}.php -; \
 		php --syntax-check $${file}.php; \
 		php test.php $${file}; \
