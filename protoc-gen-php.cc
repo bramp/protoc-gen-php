@@ -17,6 +17,8 @@
 #include <string>
 #include <algorithm>
 
+#include <cstdio> // for sprintf
+
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/wire_format.h>
 
@@ -49,7 +51,7 @@ class PHPCodeGenerator : public CodeGenerator {
 		void PrintMessageRead(io::Printer &printer, const Descriptor & message, vector<const FieldDescriptor *> & required_fields, const FieldDescriptor * parentField) const;
 
 		// Print the write() method
-		void PrintMessageWrite(io::Printer &printer, const Descriptor & message) const;
+		void PrintMessageWrite(io::Printer &printer, const Descriptor & message, const FieldDescriptor * parentField) const;
 
 		// Print the size() method
 		void PrintMessageSize(io::Printer &printer, const Descriptor & message) const;
@@ -350,8 +352,37 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 	);
 }
 
-void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message) const {
-/*
+string tagToPHPString(uint32 tag) {
+	const int dest_length = sizeof(tag) * 4 + 1; // Maximum possible expansion
+	scoped_array<char> dest(new char[dest_length]);
+
+	unsigned int shift = 24;
+	uint32 mask = 0xff000000;
+	char *p = dest.get();
+
+	while(mask > 0) {
+		if (tag & mask) {
+			uint32 v = (tag >> shift) & 0xFF;
+			if ((v >= 0 && v <= 31) || v >= 127 ) {
+				sprintf(p, "\\x%02x", v);
+				p += 4;
+			} else if (v == '"'){
+				*p++ = '\\';
+				*p++ = (char)v;
+			} else {
+				*p++ = (char)v;
+			}
+		}
+
+		mask >>= 8;
+		shift -= 8;
+	}
+
+	return string(dest.get());
+}
+
+void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message, const FieldDescriptor * parentField) const {
+
 	// Write
 	printer.Print(
 		"\n"
@@ -362,8 +393,19 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 	printer.Print(
 		"if (!$this->validateRequired())\n"
 		"  throw new Exception('Required fields are missing');\n"
-		"}\n"
 	);
+
+	if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
+		// If we are group print the start tag
+		uint32 tag = WireFormatLite::MakeTag(
+			parentField->number(),
+			WireFormatLite::WIRETYPE_START_GROUP
+		);
+		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+	} else {
+		// If we are message print our length
+		printer.Print("Protobuf::write_varint($fp, $this->size());\n");
+	}
 
 	//"$wire  = $tag & 0x07;\n"
 	//"$field = $tag >> 3;\n"
@@ -372,28 +414,25 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 		const FieldDescriptor &field ( *message.field(i) );
 
 		string var ( VariableName(field) );
-		if (field.is_repeated())
-			var += "[]";
+		//if (field.is_repeated())
+		//	var += "[]";
 		if (field.is_packable())
 			throw "Error we do not yet support packed values";
-		if (field.is_required())
-			required_fields.push_back( &field );
 
-		int varint = (field.index() << 3) | wire;
+		uint32 tag = WireFormatLite::MakeTag(
+			field.number(),
+			WireFormat::WireTypeForFieldType(field.type())
+		);
 
 		string commands;
 
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-				commands = "ASSERT('$wire == 1');\n"
-						   "$this->" + var + " = Protobuf::write_double($fp, $this->" + var + ");\n"
-						   "$limit-=8;";
+				commands = "Protobuf::write_double($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-				commands = "ASSERT('$wire == 5');\n"
-						   "$this->" + var + " = Protobuf::read_float($fp);\n"
-						   "$limit-=4;";
+				commands = "Protobuf::write_float($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
@@ -401,120 +440,67 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-				commands = "ASSERT('$wire == 0');\n"
-						   "$this->" + var + " = Protobuf::read_varint($fp, &$limit);";
+				commands = "Protobuf::write_varint($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-				commands = "ASSERT('$wire == 1');\n"
-						   "$this->" + var + " = Protobuf::read_uint64($fp);\n"
-						   "$limit-=8;";
+				commands = "Protobuf::write_uint64($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-				commands = "ASSERT('$wire == 1');\n"
-						   "$this->" + var + " = Protobuf::read_int64($fp);\n"
-						   "$limit-=8;";
+				commands = "Protobuf::write_int64($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-				commands = "ASSERT('$wire == 5');\n"
-						   "$this->" + var + " = Protobuf::read_uint32($fp);\n"
-						   "$limit-=4;";
+				commands = "Protobuf::write_uint32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-				commands = "ASSERT('$wire == 5');\n"
-						   "$this->" + var + " = Protobuf::read_int32($fp);\n"
-						   "$limit-=4;";
+				commands = "Protobuf::write_int32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-				commands = "ASSERT('$wire == 0');\n"
-						   "$this->" + var + " = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
+				commands = "Protobuf::write_varint($fp, `var` ? 1 : 0);\n";
 				break;
 
 			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-				commands = "ASSERT('$wire == 2');\n"
-						   "$len = Protobuf::read_varint($fp, $limit);\n"
-						   "$this->" + var + " = fread($fp, $len);\n"
-						   "$limit-=$len;";
+				commands = "Protobuf::write_varint($fp, strlen(`var`));\n"
+						   "fwrite($fp, `var`);\n";
 				break;
 
-			case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
-				const Descriptor & d( *field.message_type() );
-				commands = "ASSERT('$wire == 3');\n"
-						   "$this->" + var + " = new " + ClassName(d) + "($fp, $limit);";
+			case FieldDescriptor::TYPE_GROUP: // Tag-delimited message.  Deprecated.
+			case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
+				commands = "`var`->write($fp);\n";
 				break;
-			}
-
-			case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
-				const Descriptor & d( *field.message_type() );
-				commands = "ASSERT('$wire == 2');\n"
-						   "$len = Protobuf::read_varint($fp, $limit);\n"
-						   "$limit-=$len;\n"
-						   "$this->" + var + " = new " + ClassName(d) + "($fp, &$len);\n"
-						   "ASSERT('$len == 0');";
-				break;
-			}
 
 			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-				commands = "ASSERT('$wire == 5');\n"
-						   "$this->" + var + " = Protobuf::read_zint32($fp);\n"
-						   "$limit-=4;";
+				commands = "Protobuf::write_zint32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-				commands = "ASSERT('$wire == 1');\n"
-						   "$this->" + var + " = Protobuf::read_zint32($fp);\n"
-						   "$limit-=8;";
+				commands = "Protobuf::write_zint64($fp, `var`);\n";
 				break;
 
 			default:
 				throw "Error: Unsupported type";// TODO use the proper exception
 		}
 
-		printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
-
-		printer.Indent();
-		printer.Print(commands.c_str());
-		printer.Print("\nbreak;\n");
-		printer.Outdent();
+		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+		printer.Print(commands.c_str(), "var", "a");
 	}
 
-	if (php_skip_unknown) {
-		printer.Print(
-			"default:\n"
-			"  $limit -= Protobuf::skip($fp, $wire);\n",
-			"name", ClassName(message)
+	if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
+		// If we are group print the end tag
+		uint32 tag = WireFormatLite::MakeTag(
+			parentField->number(),
+			WireFormatLite::WIRETYPE_END_GROUP
 		);
-	} else {
-		printer.Print(
-			"default:\n"
-			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_field($fp, $wire, $limit);\n",
-			"name", ClassName(message)
-		);
+		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
 	}
-
-	printer.Outdent();
-	printer.Outdent();
-	printer.Print(
-		"  }\n" // switch
-		"}\n"   // while
-	);
 
 	printer.Outdent();
 	printer.Print("}\n");
-*/
-}
-
-unsigned int varint_size(int i) {
-	// TODO change this to use math not loops :)
-	unsigned int len = 1;
-	while (i >>= 7)
-		len++;
-	return len;
 }
 
 void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor & message) const {
@@ -682,7 +668,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 	// Print the read/write methods
 	PrintMessageRead(printer, message, required_fields, parentField);
-	PrintMessageWrite(printer, message);
+	PrintMessageWrite(printer, message, parentField);
 
 	PrintMessageSize(printer, message);
 
