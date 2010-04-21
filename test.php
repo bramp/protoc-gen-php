@@ -20,9 +20,16 @@
 
 		echo $m;
 
+		//$mem = fopen('php://memory', 'wb');
+		$mem = fopen('temp', 'wb');
+		if ($mem === false)
+			exit('Unable to open output stream');
+
 		$s = fstat($fp);
 		echo 'File size: ' . $s['size'] . "\n";
-		echo 'Response size: ' . $m->size() . "\n";
+		echo 'Guested size: ' . $m->size() . "\n";
+		$m->write($mem);
+		echo 'Write size: ' . ftell($mem) . "\n";
 
 		fclose($fp);
 

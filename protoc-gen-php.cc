@@ -381,12 +381,32 @@ string tagToPHPString(uint32 tag) {
 	return string(dest.get());
 }
 
+/**
+ * Some notes
+ * Tag    <varint fieldID wireType>
+ * Field  <tag> <value>
+ * Length <tag> <len> <data>
+ * Group  <start tag> <field>+ <end tag>
+ * Embedded Message <tag> <len> <field>+
+ * Start <field>+ (You have to know what type of Message it is, and it is not length prefixed)
+ *
+ * The Message class should not print its own length (this should be printed by the parent Message)
+ * The Group class is responsible for printing it's own end tag, but not the start
+ * Otherwise the Message/Group will print everything of the fields.
+ */
+
+/**
+ * Prints the write() method for this Message
+ * @param printer
+ * @param message
+ * @param parentField
+ */
 void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message, const FieldDescriptor * parentField) const {
 
 	// Write
 	printer.Print(
 		"\n"
-		"function write($fp, $limit = PHP_INT_MAX) {\n"
+		"function write($fp) {\n"
 	);
 	printer.Indent();
 
@@ -395,27 +415,10 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 		"  throw new Exception('Required fields are missing');\n"
 	);
 
-	if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
-		// If we are group print the start tag
-		uint32 tag = WireFormatLite::MakeTag(
-			parentField->number(),
-			WireFormatLite::WIRETYPE_START_GROUP
-		);
-		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
-	} else {
-		// If we are message print our length
-		printer.Print("Protobuf::write_varint($fp, $this->size());\n");
-	}
-
-	//"$wire  = $tag & 0x07;\n"
-	//"$field = $tag >> 3;\n"
-
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor &field ( *message.field(i) );
 
 		string var ( VariableName(field) );
-		//if (field.is_repeated())
-		//	var += "[]";
 		if (field.is_packable())
 			throw "Error we do not yet support packed values";
 
@@ -470,8 +473,17 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				break;
 
 			case FieldDescriptor::TYPE_GROUP: // Tag-delimited message.  Deprecated.
+				// THe start tag has already been printed, but also print the end tag
+				uint32 endtag = WireFormatLite::MakeTag (
+					field.number(),
+					WireFormatLite::WIRETYPE_END_GROUP
+				);
+				commands = "`var`->write($fp); // group\n"
+				           "fwrite($fp, \"" + tagToPHPString(endtag) + "\");\n";
+
 			case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
-				commands = "`var`->write($fp);\n";
+				commands = "Protobuf::write_varint($fp, `var`->size()); // message\n"
+				           "`var`->write($fp);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
@@ -486,17 +498,38 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				throw "Error: Unsupported type";// TODO use the proper exception
 		}
 
-		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
-		printer.Print(commands.c_str(), "var", "a");
-	}
+		if (field.is_repeated()) {
+			printer.Print(
+				"if (!is_null($this->`var`))\n"
+				"  foreach($this->`var` as $v) {\n",
+				"var", VariableName(field)
+			);
+			printer.Indent(); printer.Indent();
+			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+			printer.Print(
+				commands.c_str(),
+				"var", "$v",
+				"tag", SimpleItoa(tag)
+			);
+			printer.Outdent(); printer.Outdent();
+			printer.Print("  }\n");
 
-	if (parentField && parentField->type() == FieldDescriptor::TYPE_GROUP) {
-		// If we are group print the end tag
-		uint32 tag = WireFormatLite::MakeTag(
-			parentField->number(),
-			WireFormatLite::WIRETYPE_END_GROUP
-		);
-		printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+		} else {
+			printer.Print(
+				"if (!is_null($this->`var`)) {\n",
+				"var", VariableName(field)
+			);
+			printer.Indent();
+			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+			printer.Print(
+				commands.c_str(),
+				"var", "$this->" + VariableName(field),
+				"tag", SimpleItoa(tag)
+			);
+			printer.Outdent();
+			printer.Print("}\n");
+		}
+
 	}
 
 	printer.Outdent();
@@ -511,46 +544,50 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 		"  $size = 0;\n"
 	);
 	printer.Indent();
+
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor &field ( *message.field(i) );
 
-		int tag = WireFormat::TagSize(field.number(), field.type()); // TODO check what this actually does!
+		// Calc the size of the tag needed
+		int tag = WireFormat::TagSize(field.number(), field.type());
 
-		string sizeCommand = "";
+		string command;
 
 		switch (WireFormat::WireTypeForField(&field)) {
 
 			case WireFormatLite::WIRETYPE_VARINT:
 				if (field.type() == FieldDescriptor::TYPE_BOOL) {
 					tag++; // A bool will always take 1 byte
+					command = "$size += `tag`;\n";
 				} else {
-					sizeCommand += "$size += `tag` + Protobuf::size_varint(`var`);\n";
+					command = "$size += `tag` + Protobuf::size_varint(`var`);\n";
 				}
 				break;
 
 			case WireFormatLite::WIRETYPE_FIXED32:
 				tag += 4;
-				sizeCommand += "$size += `tag`;\n";
+				command = "$size += `tag`;\n";
 				break;
 
 			case WireFormatLite::WIRETYPE_FIXED64:
 				tag += 8;
-				sizeCommand += "$size += `tag`;\n";
+				command = "$size += `tag`;\n";
 				break;
 
 			case WireFormatLite::WIRETYPE_LENGTH_DELIMITED:
 			case WireFormatLite::WIRETYPE_START_GROUP:
 			case WireFormatLite::WIRETYPE_END_GROUP:
 
-				if (field.type() == FieldDescriptor::TYPE_MESSAGE || field.type() == FieldDescriptor::TYPE_GROUP) {
-					sizeCommand +=
-							"$l = `var`->size();\n"
-							"$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+				if (field.type() == FieldDescriptor::TYPE_MESSAGE) {
+					command = "$l = `var`->size();\n";
+				} else if (field.type() == FieldDescriptor::TYPE_GROUP) {
+					command = "$l = `var`->size();\n";
+					tag *= 2; // Double the tag size to account for the end group tag
 				} else {
-					sizeCommand +=
-							"$l = strlen(`var`);\n"
-							"$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+					command = "$l = strlen(`var`);\n";
 				}
+
+				command += "$size += `tag` + Protobuf::size_varint($l) + $l;\n";
 				break;
 
 			default:
@@ -565,7 +602,7 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 			);
 			printer.Indent(); printer.Indent();
 			printer.Print(
-				sizeCommand.c_str(),
+				command.c_str(),
 				"var", "$v",
 				"tag", SimpleItoa(tag)
 			);
@@ -579,7 +616,7 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 			);
 			printer.Indent();
 			printer.Print(
-				sizeCommand.c_str(),
+				command.c_str(),
 				"var", "$this->" + VariableName(field),
 				"tag", SimpleItoa(tag)
 			);
