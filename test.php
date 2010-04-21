@@ -15,6 +15,7 @@
 
 	} else if ($test == 'market.proto') {
 		$fp = fopen('market2-in-1.dec', 'rb');
+		//$fp = fopen('temp', 'rb');
 
 		$m = new Response($fp);
 
@@ -31,6 +32,7 @@
 		$m->write($mem);
 		echo 'Write size: ' . ftell($mem) . "\n";
 
+		fclose($mem);
 		fclose($fp);
 
 	}

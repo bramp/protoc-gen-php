@@ -53,13 +53,32 @@ class Protobuf {
 	 * Returns how big (in bytes) this number would be as a varint
 	 */
 	public static function size_varint($i) {
-		$len = 0;
+/*		$len = 0;
 		do {
 			$i = $i >> 7;
 			$len++;
 		} while ($i != 0);
-		// TODO change this to use math not loops :)
 		return $len;
+*/
+		// TODO Change to a binary search
+		if ($i < 0x80)
+			return 1;
+		if ($i < 0x4000)
+			return 2;
+		if ($i < 0x200000)
+			return 3;
+		if ($i < 0x10000000)
+			return 4;
+		if ($i < 0x800000000)
+			return 5;
+		if ($i < 0x40000000000)
+			return 6;
+		if ($i < 0x2000000000000)
+			return 7;
+		if ($i < 0x100000000000000)
+			return 8;
+		if ($i < 0x8000000000000000)
+			return 9;
 	}
 
 	/**
@@ -166,14 +185,14 @@ class Protobuf {
 
 			case 1: // 64bit
 				if (fseek($fp, 8, SEEK_CUR) === -1)
-					throw new Exception('skip(' . get_wiretype(1) . '): Error seeking');
+					throw new Exception('skip(' . ProtoBuf::get_wiretype(1) . '): Error seeking');
 				return 8;
 
 			case 2: // length delimited
 				$varlen = 0;
 				$len = Protobuf::read_varint($fp, &$varlen);
 				if (fseek($fp, $len, SEEK_CUR) === -1)
-					throw new Exception('skip(' . get_wiretype(2) . '): Error seeking');
+					throw new Exception('skip(' . ProtoBuf::get_wiretype(2) . '): Error seeking');
 				return $len - $varlen;
 
 			//case 3: // Start group TODO we must keep looping until we find the closing end grou
@@ -183,11 +202,11 @@ class Protobuf {
 
 			case 5: // 32bit
 				if (fseek($fp, 4, SEEK_CUR) === -1)
-					throw new Exception('skip('. get_wiretype(5) . '): Error seeking');
+					throw new Exception('skip('. ProtoBuf::get_wiretype(5) . '): Error seeking');
 				return 4;
 
 			default:
-				throw new Exception('skip('. get_wiretype($wire_type) . '): Unsupported wire_type');
+				throw new Exception('skip('. ProtoBuf::get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
 	}
 
@@ -218,7 +237,7 @@ class Protobuf {
 				return fread($fp, 4);
 
 			default:
-				throw new Exception('read_unknown('. get_wiretype($wire_type) . '): Unsupported wire_type');
+				throw new Exception('read_unknown('. ProtoBuf::get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
 	}
 

@@ -352,16 +352,27 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 	);
 }
 
+/**
+ * Turns a 32 bit number into a string suitable for PHP to print out.
+ * For example, 0x12345678 would turn into "\x12\x34\x56\78".
+ * @param tag
+ * @return
+ */
 string tagToPHPString(uint32 tag) {
+
+	if (tag == 0) // Zero is special
+		return "\0x00";
+
 	const int dest_length = sizeof(tag) * 4 + 1; // Maximum possible expansion
 	scoped_array<char> dest(new char[dest_length]);
 
+	bool skip_leading_zeros = true; // Have we found some digits yet?
 	unsigned int shift = 24;
 	uint32 mask = 0xff000000;
 	char *p = dest.get();
 
 	while(mask > 0) {
-		if (tag & mask) {
+		if (tag & mask || !skip_leading_zeros) {
 			uint32 v = (tag >> shift) & 0xFF;
 			if ((v >= 0 && v <= 31) || v >= 127 ) {
 				sprintf(p, "\\x%02x", v);
@@ -372,11 +383,14 @@ string tagToPHPString(uint32 tag) {
 			} else {
 				*p++ = (char)v;
 			}
+			skip_leading_zeros = false;
 		}
 
 		mask >>= 8;
 		shift -= 8;
 	}
+
+	*p = '\0'; // Null terminate us
 
 	return string(dest.get());
 }
@@ -391,7 +405,7 @@ string tagToPHPString(uint32 tag) {
  * Start <field>+ (You have to know what type of Message it is, and it is not length prefixed)
  *
  * The Message class should not print its own length (this should be printed by the parent Message)
- * The Group class is responsible for printing it's own end tag, but not the start
+ * The Group class should only print its field, the parent should print the start/end tag
  * Otherwise the Message/Group will print everything of the fields.
  */
 
@@ -480,6 +494,7 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				);
 				commands = "`var`->write($fp); // group\n"
 				           "fwrite($fp, \"" + tagToPHPString(endtag) + "\");\n";
+				break;
 
 			case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
 				commands = "Protobuf::write_varint($fp, `var`->size()); // message\n"
@@ -506,8 +521,7 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			);
 			printer.Indent(); printer.Indent();
 			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
-			printer.Print(
-				commands.c_str(),
+			printer.Print(commands.c_str(),
 				"var", "$v",
 				"tag", SimpleItoa(tag)
 			);
@@ -521,15 +535,13 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			);
 			printer.Indent();
 			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
-			printer.Print(
-				commands.c_str(),
+			printer.Print(commands.c_str(),
 				"var", "$this->" + VariableName(field),
 				"tag", SimpleItoa(tag)
 			);
 			printer.Outdent();
 			printer.Print("}\n");
 		}
-
 	}
 
 	printer.Outdent();
@@ -575,19 +587,19 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 				break;
 
 			case WireFormatLite::WIRETYPE_LENGTH_DELIMITED:
-			case WireFormatLite::WIRETYPE_START_GROUP:
-			case WireFormatLite::WIRETYPE_END_GROUP:
-
 				if (field.type() == FieldDescriptor::TYPE_MESSAGE) {
 					command = "$l = `var`->size();\n";
-				} else if (field.type() == FieldDescriptor::TYPE_GROUP) {
-					command = "$l = `var`->size();\n";
-					tag *= 2; // Double the tag size to account for the end group tag
 				} else {
 					command = "$l = strlen(`var`);\n";
 				}
 
 				command += "$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+				break;
+
+			case WireFormatLite::WIRETYPE_START_GROUP:
+			case WireFormatLite::WIRETYPE_END_GROUP:
+				tag *= 2; // Double the tag size to account for the end group tag
+				command += "$size += `tag` + `var`->size();\n";
 				break;
 
 			default:

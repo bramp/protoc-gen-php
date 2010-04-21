@@ -44,4 +44,5 @@ test: $(TESTS:.proto=.proto.php)
 		echo | cat -n $${file}.php -; \
 		php --syntax-check $${file}.php; \
 		php test.php $${file}; \
+		hd temp > temp.hd; \
 	done ;
