@@ -21,6 +21,9 @@
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/wire_format.h>
+#include <google/protobuf/wire_format_lite.h>
+#include <google/protobuf/wire_format_lite_inl.h>
+
 
 #include <google/protobuf/compiler/plugin.h>
 #include <google/protobuf/compiler/code_generator.h>
@@ -358,36 +361,27 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
  * @param tag
  * @return
  */
-string tagToPHPString(uint32 tag) {
+string arrayToPHPString(uint8 *a, size_t len) {
 
-	if (tag == 0) // Zero is special
-		return "\0x00";
+	assert(a != NULL);
 
-	const int dest_length = sizeof(tag) * 4 + 1; // Maximum possible expansion
+	const int dest_length = len * 4 + 1; // Maximum possible expansion
 	scoped_array<char> dest(new char[dest_length]);
 
-	bool skip_leading_zeros = true; // Have we found some digits yet?
-	unsigned int shift = 24;
-	uint32 mask = 0xff000000;
 	char *p = dest.get();
 
-	while(mask > 0) {
-		if (tag & mask || !skip_leading_zeros) {
-			uint32 v = (tag >> shift) & 0xFF;
-			if ((v >= 0 && v <= 31) || v >= 127 ) {
-				sprintf(p, "\\x%02x", v);
-				p += 4;
-			} else if (v == '"'){
-				*p++ = '\\';
-				*p++ = (char)v;
-			} else {
-				*p++ = (char)v;
-			}
-			skip_leading_zeros = false;
+	while(len > 0) {
+		uint8 c = *a++;
+		if ((c >= 0 && c <= 31) || c >= 127 ) {
+			p += sprintf(p, "\\x%02x", c);
+		} else if (c == '"'){
+			*p++ = '\\';
+			*p++ = c;
+		} else {
+			*p++ = c;
 		}
 
-		mask >>= 8;
-		shift -= 8;
+		len--;
 	}
 
 	*p = '\0'; // Null terminate us
@@ -432,17 +426,19 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor &field ( *message.field(i) );
 
-		string var ( VariableName(field) );
 		if (field.is_packable())
 			throw "Error we do not yet support packed values";
 
-		uint32 tag = WireFormatLite::MakeTag(
-			field.number(),
-			WireFormat::WireTypeForFieldType(field.type())
-		);
+		// Create the tag
+		uint8 tag[5];
+		uint8 *tmp;
+		tmp = WireFormatLite::WriteTagToArray(
+				field.number(),
+				WireFormat::WireTypeForFieldType(field.type()),
+				tag);
+		int tagLen = tmp - tag;
 
 		string commands;
-
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
 				commands = "Protobuf::write_double($fp, `var`);\n";
@@ -486,16 +482,18 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 						   "fwrite($fp, `var`);\n";
 				break;
 
-			case FieldDescriptor::TYPE_GROUP: // Tag-delimited message.  Deprecated.
-				// THe start tag has already been printed, but also print the end tag
-				uint32 endtag = WireFormatLite::MakeTag (
-					field.number(),
-					WireFormatLite::WIRETYPE_END_GROUP
-				);
+			case FieldDescriptor::TYPE_GROUP: {// Tag-delimited message.  Deprecated.
+				// The start tag has already been printed, but also print the end tag
+				uint8 endtag[5];
+				tmp = WireFormatLite::WriteTagToArray(
+						field.number(),
+						WireFormatLite::WIRETYPE_END_GROUP,
+						endtag);
+				int endtagLen = tmp - endtag;
 				commands = "`var`->write($fp); // group\n"
-				           "fwrite($fp, \"" + tagToPHPString(endtag) + "\");\n";
+				           "fwrite($fp, \"" + arrayToPHPString(endtag, endtagLen) + "\");\n";
 				break;
-
+			}
 			case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
 				commands = "Protobuf::write_varint($fp, `var`->size()); // message\n"
 				           "`var`->write($fp);\n";
@@ -520,10 +518,9 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				"var", VariableName(field)
 			);
 			printer.Indent(); printer.Indent();
-			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", arrayToPHPString(tag, tagLen));
 			printer.Print(commands.c_str(),
-				"var", "$v",
-				"tag", SimpleItoa(tag)
+				"var", "$v"
 			);
 			printer.Outdent(); printer.Outdent();
 			printer.Print("  }\n");
@@ -534,10 +531,9 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				"var", VariableName(field)
 			);
 			printer.Indent();
-			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", tagToPHPString(tag));
+			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", arrayToPHPString(tag, tagLen));
 			printer.Print(commands.c_str(),
-				"var", "$this->" + VariableName(field),
-				"tag", SimpleItoa(tag)
+				"var", "$this->" + VariableName(field)
 			);
 			printer.Outdent();
 			printer.Print("}\n");
@@ -598,7 +594,7 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 
 			case WireFormatLite::WIRETYPE_START_GROUP:
 			case WireFormatLite::WIRETYPE_END_GROUP:
-				tag *= 2; // Double the tag size to account for the end group tag
+				// WireFormat::TagSize returns the tag size * two when using groups, to account for both the start and end tag
 				command += "$size += `tag` + `var`->size();\n";
 				break;
 

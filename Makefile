@@ -22,26 +22,26 @@ $(MAIN): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
-	$(RM) *.o *~ $(MAIN)
+	$(RM) *.o $(MAIN) $(GENTESTS)
 
 depend: $(SRCS)
 	makedepend $(INCLUDES) $^
 
 valgrind: DEBUGCMD=gdb --args
 debug: all
-	gdb --args protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php addressbook.proto
+	gdb --args protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php market.proto
 
 valgrind: DEBUGCMD=valgrind --trace-children=yes --leak-check=full
 valgrind: all test
 
 TESTS = addressbook.proto market.proto
-
+GENTESTS = $(TESTS:.proto=.proto.php)
 %.proto.php : %.proto $(MAIN)
 	$(DEBUGCMD) protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
 
-test: $(TESTS:.proto=.proto.php)
+test: $(GENTESTS)
 	for file in $(TESTS); do \
-		echo | cat -n $${file}.php -; \
+#		echo | cat -n $${file}.php -; \
 		php --syntax-check $${file}.php; \
 		php test.php $${file}; \
 		hd temp > temp.hd; \
