@@ -9,7 +9,8 @@
  *  Services
  *  Packages
  *  Options
- *  Better validation
+ *  Better validation (add code to check setted values are valid)
+ *
  */
 #include "strutil.h" // TODO This header is from the offical protobuf source, but it is not normally installed
 
@@ -196,7 +197,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 	printer.Indent();
 
 	printer.Print(
-		"$tag = Protobuf::read_varint($fp, &$limit);\n"
+		"$tag = Protobuf::read_varint($fp, $limit);\n"
 		"if ($tag === false) break;\n"
 		"$wire  = $tag & 0x07;\n"
 		"$field = $tag >> 3;\n"
@@ -245,7 +246,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
 				commands = "ASSERT('$wire == 0');\n"
-						   "$this->`var` = Protobuf::read_varint($fp, &$limit);";
+						   "$this->`var` = Protobuf::read_varint($fp, $limit);";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
@@ -297,7 +298,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 				commands = "ASSERT('$wire == 2');\n"
 						   "$len = Protobuf::read_varint($fp, $limit);\n"
 						   "$limit-=$len;\n"
-						   "$this->`var` = new " + ClassName(d) + "($fp, &$len);\n"
+						   "$this->`var` = new " + ClassName(d) + "($fp, $len);\n"
 						   "ASSERT('$len == 0');";
 				break;
 			}
@@ -882,6 +883,7 @@ void PHPCodeGenerator::PrintEnum(io::Printer &printer, const EnumDescriptor & e)
 	// Print a toString
 	printer.Print(
 		"public static function toString($value) {\n"
+		"  if (is_null($value)) return null;\n"
 		"  if (array_key_exists($value, self::$_values))\n"
 		"    return self::$_values[$value];\n"
 		"  return 'UNKNOWN';\n"

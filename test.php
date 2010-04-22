@@ -15,7 +15,8 @@
 
 	} else if ($test == 'market.proto') {
 		//$fp = fopen('market2-in-1.dec', 'rb');
-		$fp = fopen('temp', 'rb');
+		$fp = fopen('market2-in-2.dec', 'rb');
+		//$fp = fopen('temp', 'rb');
 
 		$m = new Response($fp);
 
