@@ -308,9 +308,12 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 						   "$len = Protobuf::read_varint($fp, $limit);\n"
 				           "if ($len === false)\n"
 				           "  throw new Exception('Protobuf::read_varint returned false');\n"
-						   "$tmp = fread($fp, $len);\n"
+				           "if ($len > 0)\n"
+						   "  $tmp = fread($fp, $len);\n"
+				           "else\n"
+				           "  $tmp = '';\n"
 				           "if ($tmp === false)\n"
-				           "  throw new Exception('fread returned false');\n"
+				           "  throw new Exception(\"fread($len) returned false\");\n"
 						   "$this->`var` = $tmp;\n"
 						   "$limit-=$len;";
 				break;
@@ -746,7 +749,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		"function __construct($in = NULL, &$limit = PHP_INT_MAX) {\n"
 		"  if($in !== NULL) {\n"
 		"    if (is_string($in)) {\n"
-		"      $fp = fopen('php://memory');\n"
+		"      $fp = fopen('php://memory', 'r+b');\n"
 		"      fwrite($fp, $in);\n"
 		"      rewind($fp);\n"
 		"    } else if (is_resource($in)) {\n"
