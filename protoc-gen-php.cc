@@ -376,7 +376,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 	} else {
 		printer.Print(
 			"default:\n"
-			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)] = Protobuf::read_field($fp, $wire, $limit);\n",
+			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)][] = Protobuf::read_field($fp, $wire, $limit);\n",
 			"name", ClassName(message)
 		);
 	}
