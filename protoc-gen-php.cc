@@ -743,9 +743,19 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	// Constructor
 	printer.Print(
 		"\n"
-		"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
-		"  if($fp !== NULL)\n"
+		"function __construct($in = NULL, &$limit = PHP_INT_MAX) {\n"
+		"  if($in !== NULL) {\n"
+		"    if (is_string($in)) {\n"
+		"      $fp = fopen('php://memory');\n"
+		"      fwrite($fp, $in);\n"
+		"      rewind($fp);\n"
+		"    } else if (is_resource($in)) {\n"
+		"      $fp = $in;\n"
+		"    } else {\n"
+		"      throw new Exception('Invalid in parameter');\n"
+		"    }\n"
 		"    $this->read($fp, $limit);\n"
+		"  }\n"
 		"}\n"
 	);
 
