@@ -230,13 +230,19 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$this->`var` = Protobuf::read_double($fp);\n"
+						   "$tmp = Protobuf::read_double($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_double returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=8;";
 				break;
 
 			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
 				commands = "ASSERT('$wire == 5');\n"
-						   "$this->`var` = Protobuf::read_float($fp);\n"
+						   "$tmp = Protobuf::read_float($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_float returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=4;";
 				break;
 
@@ -246,43 +252,66 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
 				commands = "ASSERT('$wire == 0');\n"
-						   "$this->`var` = Protobuf::read_varint($fp, $limit);";
+						   "$tmp = Protobuf::read_varint($fp, $limit);\n"
+				           "if ($tmp === false)\n"
+				           "  throw new Exception('Protobuf::read_varint returned false');\n"
+				           "$this->`var` = $tmp;\n";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
 				commands = "ASSERT('$wire == 1');\n"
-						   "$this->`var` = Protobuf::read_uint64($fp);\n"
+						   "$tmp = Protobuf::read_uint64($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_unint64 returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=8;";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$this->`var` = Protobuf::read_int64($fp);\n"
+						   "$tmp = Protobuf::read_int64($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_int64 returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=8;";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
 				commands = "ASSERT('$wire == 5');\n"
-						   "$this->`var` = Protobuf::read_uint32($fp);\n"
+						   "$tmp = Protobuf::read_uint32($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_uint32 returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=4;";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
 				commands = "ASSERT('$wire == 5');\n"
-						   "$this->`var` = Protobuf::read_int32($fp);\n"
+						   "$tmp = Protobuf::read_int32($fp);\n"
+						   "if ($tmp === false)\n"
+						   "  throw new Exception('Protobuf::read_int32 returned false');\n"
+						   "this->`var` = $tmp\n;"
 						   "$limit-=4;";
 				break;
 
 			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
 				commands = "ASSERT('$wire == 0');\n"
-						   "$this->`var` = Protobuf::read_varint($fp, $limit) > 0 ? true : false;";
+						   "$tmp = Protobuf::read_varint($fp, $limit);\n"
+				           "if ($tmp === false)\n"
+				           "  throw new Exception('Protobuf::read_varint returned false');\n"
+				           "$this->`var` = $tmp > 0 ? true : false;";
 				break;
 
 			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
 				commands = "ASSERT('$wire == 2');\n"
 						   "$len = Protobuf::read_varint($fp, $limit);\n"
-						   "$this->`var` = fread($fp, $len);\n"
+				           "if ($len === false)\n"
+				           "  throw new Exception('Protobuf::read_varint returned false');\n"
+						   "$tmp = fread($fp, $len);\n"
+				           "if ($tmp === false)\n"
+				           "  throw new Exception('fread returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=$len;";
 				break;
 
@@ -297,6 +326,8 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 				const Descriptor & d( *field.message_type() );
 				commands = "ASSERT('$wire == 2');\n"
 						   "$len = Protobuf::read_varint($fp, $limit);\n"
+				           "if ($len === false)\n"
+				           "  throw new Exception('Protobuf::read_varint returned false');\n"
 						   "$limit-=$len;\n"
 						   "$this->`var` = new " + ClassName(d) + "($fp, $len);\n"
 						   "ASSERT('$len == 0');";
@@ -305,14 +336,20 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
 				commands = "ASSERT('$wire == 5');\n"
-						   "$this->`var` = Protobuf::read_zint32($fp);\n"
+						   "$tmp = Protobuf::read_zint32($fp);\n"
+				           "if ($tmp === false)\n"
+				           "  throw new Exception('Protobuf::read_zint32 returned false');\n"
+						   "$this->`var` = $tmp;\n"
 						   "$limit-=4;";
 				break;
 
 			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$this->`var` = Protobuf::read_zint64($fp);\n"
-						   "$limit-=8;";
+				           "$tmp = Protobuf::read_zint64($fp);\n"
+				           "if ($tmp === false)\n"
+				           "  throw new Exception('Protobuf::read_zint64 returned false');\n"
+				           "$this->`var` = $tmp;\n"
+				           "$limit-=8;";
 				break;
 
 			default:
