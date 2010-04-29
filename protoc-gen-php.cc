@@ -705,10 +705,18 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 	// Constructor
 	printer.Print(
-		"\n"
+		"\n" // TODO maybe some kind of inhertiance would reduce all this code!
 		"function __construct($fp = NULL, &$limit = PHP_INT_MAX) {\n"
-		"  if($fp !== NULL)\n"
+		"  if($fp !== NULL) {\n"
+		"    if (is_string($fp)) {\n"
+		"      $str = $fp;\n"
+		"      $fp = fopen('php://memory', 'r+b');\n"
+		"      fwrite($fp, $str);\n"
+		"      rewind($fp);\n"
+		"    }\n"
 		"    $this->read($fp, $limit);\n"
+		"    if (isset($str)) fclose($fp);\n"
+		"  }\n"
 		"}\n"
 	);
 
