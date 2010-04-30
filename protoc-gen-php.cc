@@ -8,9 +8,8 @@
  *  Extensions
  *  Services
  *  Packages
- *  Options
  *  Better validation (add code to check setted values are valid)
- *
+ *  option optimize_for = CODE_SIZE/SPEED;
  */
 #include "strutil.h" // TODO This header is from the offical protobuf source, but it is not normally installed
 
@@ -32,6 +31,7 @@
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 
+#include "php_options.pb.h"
 
 using namespace google::protobuf;
 using namespace google::protobuf::compiler;
@@ -183,9 +183,13 @@ string PHPCodeGenerator::DefaultValueAsString(const FieldDescriptor & field, boo
   return "";
 }
 
-bool php_skip_unknown = false; // TODO get this from an option
-
 void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor & message, vector<const FieldDescriptor *> & required_fields, const FieldDescriptor * parentField) const {
+
+	// Parse the file options
+	const PHPFileOptions & options ( message.file()->options().GetExtension(php) );
+	bool skip_unknown = options.skip_unknown();
+	const char * pb_namespace = options.namespace_().empty() ? "" : "\\";
+
 	// Read
 	printer.Print(
 		"\n"
@@ -197,13 +201,14 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 	printer.Indent();
 
 	printer.Print(
-		"$tag = Protobuf::read_varint($fp, $limit);\n"
+		"$tag = `ns`Protobuf::read_varint($fp, $limit);\n"
 		"if ($tag === false) break;\n"
 		"$wire  = $tag & 0x07;\n"
 		"$field = $tag >> 3;\n"
-		"//var_dump(\"`name`: Found $field type \" . Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
+		"//var_dump(\"`name`: Found $field type \" . `ns`Protobuf::get_wiretype($wire) . \" $limit bytes left\");\n"
 		"switch($field) {\n",
-		"name", ClassName(message)
+		"name", ClassName(message),
+		"ns", pb_namespace
 	);
 	printer.Indent();
 
@@ -230,7 +235,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$tmp = Protobuf::read_double($fp);\n"
+						   "$tmp = `ns`Protobuf::read_double($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_double returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -239,7 +244,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
 				commands = "ASSERT('$wire == 5');\n"
-						   "$tmp = Protobuf::read_float($fp);\n"
+						   "$tmp = `ns`Protobuf::read_float($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_float returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -252,7 +257,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
 				commands = "ASSERT('$wire == 0');\n"
-						   "$tmp = Protobuf::read_varint($fp, $limit);\n"
+						   "$tmp = `ns`Protobuf::read_varint($fp, $limit);\n"
 				           "if ($tmp === false)\n"
 				           "  throw new Exception('Protobuf::read_varint returned false');\n"
 				           "$this->`var` = $tmp;\n";
@@ -260,7 +265,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
 				commands = "ASSERT('$wire == 1');\n"
-						   "$tmp = Protobuf::read_uint64($fp);\n"
+						   "$tmp = `ns`Protobuf::read_uint64($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_unint64 returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -269,7 +274,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
 				commands = "ASSERT('$wire == 1');\n"
-						   "$tmp = Protobuf::read_int64($fp);\n"
+						   "$tmp = `ns`Protobuf::read_int64($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_int64 returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -278,7 +283,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
 				commands = "ASSERT('$wire == 5');\n"
-						   "$tmp = Protobuf::read_uint32($fp);\n"
+						   "$tmp = `ns`Protobuf::read_uint32($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_uint32 returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -287,7 +292,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
 				commands = "ASSERT('$wire == 5');\n"
-						   "$tmp = Protobuf::read_int32($fp);\n"
+						   "$tmp = `ns`Protobuf::read_int32($fp);\n"
 						   "if ($tmp === false)\n"
 						   "  throw new Exception('Protobuf::read_int32 returned false');\n"
 						   "this->`var` = $tmp\n;"
@@ -296,7 +301,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
 				commands = "ASSERT('$wire == 0');\n"
-						   "$tmp = Protobuf::read_varint($fp, $limit);\n"
+						   "$tmp = `ns`Protobuf::read_varint($fp, $limit);\n"
 				           "if ($tmp === false)\n"
 				           "  throw new Exception('Protobuf::read_varint returned false');\n"
 				           "$this->`var` = $tmp > 0 ? true : false;";
@@ -305,7 +310,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
 				commands = "ASSERT('$wire == 2');\n"
-						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$len = `ns`Protobuf::read_varint($fp, $limit);\n"
 				           "if ($len === false)\n"
 				           "  throw new Exception('Protobuf::read_varint returned false');\n"
 				           "if ($len > 0)\n"
@@ -328,7 +333,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 			case FieldDescriptor::TYPE_MESSAGE: {// Length-delimited message.
 				const Descriptor & d( *field.message_type() );
 				commands = "ASSERT('$wire == 2');\n"
-						   "$len = Protobuf::read_varint($fp, $limit);\n"
+						   "$len = `ns`Protobuf::read_varint($fp, $limit);\n"
 				           "if ($len === false)\n"
 				           "  throw new Exception('Protobuf::read_varint returned false');\n"
 						   "$limit-=$len;\n"
@@ -339,7 +344,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
 				commands = "ASSERT('$wire == 5');\n"
-						   "$tmp = Protobuf::read_zint32($fp);\n"
+						   "$tmp = `ns`Protobuf::read_zint32($fp);\n"
 				           "if ($tmp === false)\n"
 				           "  throw new Exception('Protobuf::read_zint32 returned false');\n"
 						   "$this->`var` = $tmp;\n"
@@ -348,7 +353,7 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 
 			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
 				commands = "ASSERT('$wire == 1');\n"
-				           "$tmp = Protobuf::read_zint64($fp);\n"
+				           "$tmp = `ns`Protobuf::read_zint64($fp);\n"
 				           "if ($tmp === false)\n"
 				           "  throw new Exception('Protobuf::read_zint64 returned false');\n"
 				           "$this->`var` = $tmp;\n"
@@ -362,22 +367,24 @@ void PHPCodeGenerator::PrintMessageRead(io::Printer &printer, const Descriptor &
 		printer.Print("case `index`:\n", "index", SimpleItoa(field.number()) );
 
 		printer.Indent();
-		printer.Print(commands.c_str(), "var", var);
+		printer.Print(commands.c_str(), "var", var, "ns", pb_namespace);
 		printer.Print("\nbreak;\n");
 		printer.Outdent();
 	}
 
-	if (php_skip_unknown) {
+	if (skip_unknown) {
 		printer.Print(
 			"default:\n"
-			"  $limit -= Protobuf::skip_field($fp, $wire);\n",
-			"name", ClassName(message)
+			"  $limit -= `ns`Protobuf::skip_field($fp, $wire);\n",
+			"name", ClassName(message),
+			"ns", pb_namespace
 		);
 	} else {
 		printer.Print(
 			"default:\n"
-			"  $this->_unknown[$field . '-' . Protobuf::get_wiretype($wire)][] = Protobuf::read_field($fp, $wire, $limit);\n",
-			"name", ClassName(message)
+			"  $this->_unknown[$field . '-' . `ns`Protobuf::get_wiretype($wire)][] = `ns`Protobuf::read_field($fp, $wire, $limit);\n",
+			"name", ClassName(message),
+			"ns", pb_namespace
 		);
 	}
 
@@ -452,6 +459,10 @@ string arrayToPHPString(uint8 *a, size_t len) {
  */
 void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message, const FieldDescriptor * parentField) const {
 
+	// Parse the file options
+	const PHPFileOptions & options ( message.file()->options().GetExtension(php) );
+	const char * pb_namespace = options.namespace_().empty() ? "" : "\\";
+
 	// Write
 	printer.Print(
 		"\n"
@@ -482,11 +493,11 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 		string commands;
 		switch (field.type()) {
 			case FieldDescriptor::TYPE_DOUBLE: // double, exactly eight bytes on the wire
-				commands = "Protobuf::write_double($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_double($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FLOAT: // float, exactly four bytes on the wire.
-				commands = "Protobuf::write_float($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_float($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
@@ -494,32 +505,32 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
-				commands = "Protobuf::write_varint($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_varint($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED64: // uint64, exactly eight bytes on the wire.
-				commands = "Protobuf::write_uint64($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_uint64($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED64: // int64, exactly eight bytes on the wire
-				commands = "Protobuf::write_int64($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_int64($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_FIXED32: // uint32, exactly four bytes on the wire.
-				commands = "Protobuf::write_uint32($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_uint32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SFIXED32: // int32, exactly four bytes on the wire
-				commands = "Protobuf::write_int32($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_int32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_BOOL: // bool, varint on the wire.
-				commands = "Protobuf::write_varint($fp, `var` ? 1 : 0);\n";
+				commands = "`ns`Protobuf::write_varint($fp, `var` ? 1 : 0);\n";
 				break;
 
 			case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
 			case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
-				commands = "Protobuf::write_varint($fp, strlen(`var`));\n"
+				commands = "`ns`Protobuf::write_varint($fp, strlen(`var`));\n"
 						   "fwrite($fp, `var`);\n";
 				break;
 
@@ -536,16 +547,16 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 				break;
 			}
 			case FieldDescriptor::TYPE_MESSAGE: // Length-delimited message.
-				commands = "Protobuf::write_varint($fp, `var`->size()); // message\n"
+				commands = "`ns`Protobuf::write_varint($fp, `var`->size()); // message\n"
 				           "`var`->write($fp);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SINT32:   // int32, ZigZag-encoded varint on the wire
-				commands = "Protobuf::write_zint32($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_zint32($fp, `var`);\n";
 				break;
 
 			case FieldDescriptor::TYPE_SINT64:   // int64, ZigZag-encoded varint on the wire
-				commands = "Protobuf::write_zint64($fp, `var`);\n";
+				commands = "`ns`Protobuf::write_zint64($fp, `var`);\n";
 				break;
 
 			default:
@@ -561,7 +572,8 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			printer.Indent(); printer.Indent();
 			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", arrayToPHPString(tag, tagLen));
 			printer.Print(commands.c_str(),
-				"var", "$v"
+				"var", "$v",
+				"ns", pb_namespace
 			);
 			printer.Outdent(); printer.Outdent();
 			printer.Print("  }\n");
@@ -574,7 +586,8 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 			printer.Indent();
 			printer.Print("fwrite($fp, \"`tag`\");\n", "tag", arrayToPHPString(tag, tagLen));
 			printer.Print(commands.c_str(),
-				"var", "$this->" + VariableName(field)
+				"var", "$this->" + VariableName(field),
+				"ns", pb_namespace
 			);
 			printer.Outdent();
 			printer.Print("}\n");
@@ -586,6 +599,10 @@ void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor 
 }
 
 void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor & message) const {
+	// Parse the file options
+	const PHPFileOptions & options ( message.file()->options().GetExtension(php) );
+	const char * pb_namespace = options.namespace_().empty() ? "" : "\\";
+
 	// Print the calc size method
 	printer.Print(
 		"\n"
@@ -609,7 +626,7 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 					tag++; // A bool will always take 1 byte
 					command = "$size += `tag`;\n";
 				} else {
-					command = "$size += `tag` + Protobuf::size_varint(`var`);\n";
+					command = "$size += `tag` + `ns`Protobuf::size_varint(`var`);\n";
 				}
 				break;
 
@@ -630,7 +647,7 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 					command = "$l = strlen(`var`);\n";
 				}
 
-				command += "$size += `tag` + Protobuf::size_varint($l) + $l;\n";
+				command += "$size += `tag` + `ns`Protobuf::size_varint($l) + $l;\n";
 				break;
 
 			case WireFormatLite::WIRETYPE_START_GROUP:
@@ -643,6 +660,10 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 				throw "Error: Unsupported wire type";// TODO use the proper exception
 		}
 
+		map<string, string> variables;
+		variables["tag"] = SimpleItoa(tag);
+		variables["ns"]  = pb_namespace;
+
 		if (field.is_repeated()) {
 			printer.Print(
 				"if (!is_null($this->`var`))\n"
@@ -650,11 +671,10 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 				"var", VariableName(field)
 			);
 			printer.Indent(); printer.Indent();
-			printer.Print(
-				command.c_str(),
-				"var", "$v",
-				"tag", SimpleItoa(tag)
-			);
+
+			variables["var"] ="$v";
+			printer.Print(variables, command.c_str());
+
 			printer.Outdent(); printer.Outdent();
 			printer.Print("  }\n");
 
@@ -664,11 +684,10 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 				"var", VariableName(field)
 			);
 			printer.Indent();
-			printer.Print(
-				command.c_str(),
-				"var", "$this->" + VariableName(field),
-				"tag", SimpleItoa(tag)
-			);
+
+			variables["var"] = "$this->" + VariableName(field);
+			printer.Print(variables, command.c_str());
+
 			printer.Outdent();
 			printer.Print("}\n");
 		}
@@ -681,6 +700,11 @@ void PHPCodeGenerator::PrintMessageSize(io::Printer &printer, const Descriptor &
 }
 
 void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & message) const {
+	// Parse the file options
+	const PHPFileOptions & options ( message.file()->options().GetExtension(php) );
+	bool skip_unknown = options.skip_unknown();
+	const char * pb_namespace = options.namespace_().empty() ? "" : "\\";
+
 	vector<const FieldDescriptor *> required_fields;
 
 	// Print nested messages
@@ -740,7 +764,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	printer.Outdent();
 	printer.Print(");\n\n");
 	*/
-	if (!php_skip_unknown)
+	if (!skip_unknown)
 		printer.Print("private $_unknown;\n");
 
 	// Constructor
@@ -791,19 +815,25 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 	);
 	printer.Indent();
 
-	if (!php_skip_unknown)
-		printer.Print("\n     . Protobuf::toString('unknown', $this->_unknown)");
+	if (!skip_unknown)
+		printer.Print("\n     . `ns`Protobuf::toString('unknown', $this->_unknown)", "ns", pb_namespace);
+
+	map<string, string> variables;
 
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor &field ( *message.field(i) );
+		variables.clear();
+		variables["name"] = VariableName(field);
+		variables["ns"]   = pb_namespace;
+
 		if (field.type() == FieldDescriptor::TYPE_ENUM) {
-			printer.Print("\n     . Protobuf::toString('`name`', `enum`::toString($this->`name`))",
-				"name", VariableName(field),
-				"enum", ClassName(*field.enum_type())
+			variables["enum"] = ClassName(*field.enum_type());
+			printer.Print(variables,
+				"\n     . `ns`Protobuf::toString('`name`', `enum`::toString($this->`name`))"
 			);
 		} else {
-			printer.Print("\n     . Protobuf::toString('`name`', $this->`name`)",
-				"name", VariableName(field)
+			printer.Print(variables,
+				"\n     . `ns`Protobuf::toString('`name`', $this->`name`)"
 			);
 		}
 	}
@@ -969,6 +999,10 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 
 	string php_filename ( file->name() + ".php" );
 
+	// Parse the options
+	const PHPFileOptions & options ( file->options().GetExtension(php) );
+	const string & namespace_ (options.namespace_());
+
 	// Generate main file.
 	scoped_ptr<io::ZeroCopyOutputStream> output(
 		output_directory->Open(php_filename)
@@ -979,13 +1013,24 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 	try {
 		printer.Print(
 			"<?php\n"
-			"// Please include the below file before this\n"
-			"//require('protocolbuffers.inc.php');\n"
+			"// Please include the below file before `filename`\n"
+			"//require('protocolbuffers.inc.php');\n",
+			"filename", php_filename.c_str()
 		);
+
+		if (!namespace_.empty()) {
+			printer.Print("namespace `ns` {\n", "ns", namespace_.c_str());
+			printer.Indent();
+		}
 
 		PrintMessages  (printer, *file);
 		PrintEnums     (printer, *file);
 		PrintServices  (printer, *file);
+
+		if (!namespace_.empty()) {
+			printer.Outdent();
+			printer.Print("}\n");
+		}
 
 		printer.Print("?>");
 
