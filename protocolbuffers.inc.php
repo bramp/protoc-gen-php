@@ -219,7 +219,7 @@ class Protobuf {
 
 			case 2: // length delimited
 				$varlen = 0;
-				$len = Protobuf::read_varint($fp, &$varlen);
+				$len = Protobuf::read_varint($fp, $varlen);
 				if (fseek($fp, $len, SEEK_CUR) === -1)
 					throw new Exception('skip(' . ProtoBuf::get_wiretype(2) . '): Error seeking');
 				return $len - $varlen;
@@ -312,45 +312,4 @@ class Protobuf {
 		return $ret;
 	}
 }
-
-$varint_tests  = array(
-	1   => "\x01",
-	2   => "\x02",
-	127 => "\x7F",
-	128 => "\x80\x01",
-	300 => "\xAC\x02",
-);
-
-function test_varint() {
-	global $varint_tests;
-
-	$fp = fopen('php://memory', 'r+b');
-	if ($fp === false)
-		exit('Unable to open stream');
-
-	foreach ($varint_tests as $i => $enc) {
-
-		// Write the answer into the buffer
-		fseek($fp, 0, SEEK_SET);
-		fwrite($fp, $enc);
-		fseek($fp, 0, SEEK_SET);
-
-		$a = Protobuf::read_varint($fp);
-		if ($a != $i)
-			exit("Failed to decode varint($i) got $a\n");
-
-		$len = Protobuf::write_varint($fp, $i);
-		fseek($fp, 0, SEEK_SET);
-		$b = fread($fp, $len);
-		if ($b != $enc)
-			exit("Failed to encode varint($i)\n");
-
-		$len = Protobuf::size_varint($i);
-
-		echo "$i len($len) OK\n";
-	}
-	fclose($fp);
-}
-
-//	test_varint();
 ?>
