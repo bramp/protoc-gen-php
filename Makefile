@@ -1,6 +1,6 @@
 
-#CXX=g++
-CXX=/home/bramp/llvm/Debug/bin/clang
+CXX=g++
+#CXX=/home/bramp/llvm/Debug/bin/clang
 
 CXXFLAGS = -Wall -g
 
