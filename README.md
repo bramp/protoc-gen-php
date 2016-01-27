@@ -9,21 +9,31 @@ It's not finished, but supports most common features, and I'm currently using it
 Install
 -------
 
-I've only tested the code on Debian Linux. You may need the following libraries which can be installed from apt:
+This has only been tested on Linux and Mac. You will need the following libraries:
 
 ```
+# For Debian based Linux
 sudo apt-get install libprotobuf-dev libprotobuf-lite7 libprotobuf7 libprotoc-dev libprotoc7
+
+# For Mac
+brew install protobuf
 ```
 
-To build just type "make".
+To build:
+```
+./autogen.sh
+./configure
+make
+sudo make install
+```
 
 Use
 ---
 
-Once compiled you can use it via protoc like so:
+Once compiled and installed you can use it via protoc like so:
 
 ```
- protoc -I. -I/usr/include --php_out . --plugin=protoc-gen-php=./protoc-gen-php your.proto
+protoc --php_out=. your.proto
 ```
 
 This should generate the file "your.proto.php", which should be able to encode and decode protocol buffer messages. When using the generated PHP code you must include the "protocolbuffers.inc.php" file.

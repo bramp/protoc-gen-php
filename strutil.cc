@@ -684,12 +684,6 @@ char *FastHex32ToBuffer(uint32 value, char* buffer) {
   return InternalFastHexToBuffer(value, buffer, 8);
 }
 
-static inline char* PlaceNum(char* p, int num, char prev_sep) {
-   *p-- = '0' + num % 10;
-   *p-- = '0' + num / 10;
-   *p-- = prev_sep;
-   return p;
-}
 
 // ----------------------------------------------------------------------
 // FastInt32ToBufferLeft()
@@ -1038,7 +1032,7 @@ char* DoubleToBuffer(double value, char* buffer) {
   // truncated to a double.
   volatile double parsed_value = strtod(buffer, NULL);
   if (parsed_value != value) {
-    int snprintf_result =
+    snprintf_result =
       snprintf(buffer, kDoubleToBufferSize, "%.*g", DBL_DIG+2, value);
 
     // Should never overflow; see above.
@@ -1087,7 +1081,7 @@ char* FloatToBuffer(float value, char* buffer) {
 
   float parsed_value;
   if (!safe_strtof(buffer, &parsed_value) || parsed_value != value) {
-    int snprintf_result =
+    snprintf_result =
       snprintf(buffer, kFloatToBufferSize, "%.*g", FLT_DIG+2, value);
 
     // Should never overflow; see above.

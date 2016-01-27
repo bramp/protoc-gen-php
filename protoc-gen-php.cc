@@ -11,7 +11,10 @@
  *  Better validation (add code to check setted values are valid)
  *  option optimize_for = CODE_SIZE/SPEED;
  */
-#include "strutil.h" // TODO This header is from the offical protobuf source, but it is not normally installed
+
+// TODO strutil.h is from the offical protobuf source, but it is not installed
+//      We use LowerString, UpperString, SimpleItoa, CEscape from it.
+#include "strutil.h" 
 
 #include <map>
 #include <string>
@@ -81,7 +84,7 @@ PHPCodeGenerator::~PHPCodeGenerator() {}
 string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   string result;
   // Note:  I distrust ctype.h due to locales.
-  for (int i = 0; i < input.size(); i++) {
+  for (size_t i = 0; i < input.size(); i++) {
     if ('a' <= input[i] && input[i] <= 'z') {
       if (cap_next_letter) {
         result += input[i] + ('A' - 'a');
@@ -459,6 +462,8 @@ string arrayToPHPString(uint8 *a, size_t len) {
  */
 void PHPCodeGenerator::PrintMessageWrite(io::Printer &printer, const Descriptor & message, const FieldDescriptor * parentField) const {
 
+	(void)parentField; // unused
+
 	// Parse the file options
 	const PHPFileOptions & options ( message.file()->options().GetExtension(php) );
 	const char * pb_namespace = options.namespace_().empty() ? "" : "\\";
@@ -798,9 +803,9 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 		"public function validateRequired() {\n"
 	);
 	printer.Indent();
-	for (int i = 0; i < required_fields.size(); ++i) {
+	for (auto field : required_fields) {
 		printer.Print("if ($this->`name` === null) return false;\n",
-			"name", VariableName(*required_fields[i])
+			"name", VariableName(*field)
 		);
 	}
 	printer.Print("return true;\n");
@@ -847,7 +852,7 @@ void PHPCodeGenerator::PrintMessage(io::Printer &printer, const Descriptor & mes
 
 		const FieldDescriptor &field ( *message.field(i) );
 
-		map<string, string> variables;
+		variables.clear();
 		variables["name"]             = VariableName(field);
 		variables["capitalized_name"] = UnderscoresToCapitalizedCamelCase(field);
 		variables["default"]          = DefaultValueAsString(field, true);
@@ -996,6 +1001,8 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
 				const string& parameter,
 				OutputDirectory* output_directory,
 				string* error) const {
+
+	(void)parameter; // unused
 
 	string php_filename ( file->name() + ".php" );
 
