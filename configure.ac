@@ -34,4 +34,4 @@ AC_TYPE_SIZE_T
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([localeconv memmove setlocale strchr strpbrk strtol strtoul strtoull])
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT(Makefile reference_app/Makefile)

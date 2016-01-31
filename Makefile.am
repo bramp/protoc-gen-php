@@ -1,4 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
+SUBDIRS = reference_app
+
 EXTRA_DIST = autogen.sh
 
 MAKEFLAGS = --no-builtin-rules
@@ -9,8 +11,11 @@ SUFFIXES:
 CXXFLAGS  = -std=c++11 -Wall -Wextra -pedantic -O2
 CXXFLAGS += -Werror -Wshadow -Wstrict-overflow -fno-strict-aliasing
 CXXFLAGS += -Wno-unused-local-typedef
+export CXXFLAGS
+
 LDFLAGS   =
 LIBS      = -lprotobuf -lprotoc
+
 
 CLEANFILES = php_options.pb.cc php_options.pb.h
 
