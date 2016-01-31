@@ -17,7 +17,7 @@ CLEANFILES = php_options.pb.cc php_options.pb.h
 PROTO_INCLUDES=$(shell pkg-config protobuf --cflags-only-I)
 
 bin_PROGRAMS = protoc-gen-php
-protoc_gen_php_SOURCES = protoc-gen-php.cc php_options.pb.cc strutil.cc strutil.h
+protoc_gen_php_SOURCES = protoc-gen-php.cc php_options.pb.cc strutil.cc strutil.h util.cc util.h php_util.cc php_util.h
 
 noinst_SCRIPTS = protocolbuffers.inc.php
 
