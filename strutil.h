@@ -302,6 +302,7 @@ inline uint32 strtou32(const char *nptr, char **endptr, int base) {
     return strtou32_adaptor(nptr, endptr, base);
 }
 
+/*
 // For now, long long is 64-bit on all the platforms we care about, so these
 // functions can simply pass the call to strto[u]ll.
 inline int64 strto64(const char *nptr, char **endptr, int base) {
@@ -315,6 +316,7 @@ inline uint64 strtou64(const char *nptr, char **endptr, int base) {
                         sizeof_uint64_is_not_sizeof_long_long);
   return strtoull(nptr, endptr, base);
 }
+*/
 
 // ----------------------------------------------------------------------
 // FastIntToBuffer()
