@@ -248,8 +248,23 @@ class Protobuf {
 	public static function read_int64 ($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 8, 'q', $limit); } // BUG We need to convert from little order to machine order first
 	public static function read_uint64($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 8, 'P', $limit); }
 
-	public static function read_zint32($fp, &$limit = PHP_INT_MAX) { throw new Exception('read_zint32 is not implemented'); }
-	public static function read_zint64($fp, &$limit = PHP_INT_MAX) { throw new Exception('read_zint64 is not implemented'); }
+	public static function read_zint32($fp, &$limit = PHP_INT_MAX) {
+		$i = Protobuf::read_varint($fp, $limit);
+		if ($i === false) {
+			return false;
+		}
+
+		return (!($i & 0x1) ? ($i >> 1) : (($i >> 1) ^ (~0)));
+	}
+
+	public static function read_zint64($fp, &$limit = PHP_INT_MAX) {
+		$i = Protobuf::read_varint($fp, $limit);
+		if ($i === false) {
+			return false;
+		}
+
+		return (!($i & 0x1) ? ($i >> 1) : (($i >> 1) ^ (~0)));
+	}
 
 	/**
 	 * Read a unknown field from the stream and decodes the value if possible.
@@ -359,8 +374,8 @@ class Protobuf {
 	public static function write_int64 ($fp, $i) { return Protobuf::write_pack($fp, $i, 'q'); } // BUG We need to convert from machine order to little order first
 	public static function write_uint64($fp, $i) { return Protobuf::write_pack($fp, $i, 'P'); }
 
-	public static function write_zint32($fp, $i) { throw new Exception('write_zint32 is not implemented'); }
-	public static function write_zint64($fp, $i) { throw new Exception('write_zint64 is not implemented'); }
+	public static function write_zint32($fp, $i) { return Protobuf::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
+	public static function write_zint64($fp, $i) { return Protobuf::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
 
 	/**
 	 * Seek past a varint
