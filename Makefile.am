@@ -25,3 +25,16 @@ protoc-gen-php.cc: php_options.pb.cc php_options.pb.h
 
 %.pb.cc %.pb.h: %.proto
 	$(PROTOC) --proto_path=$(srcdir) --cpp_out=$(builddir) $(PROTO_INCLUDES) $^
+
+
+# Useful for testing
+MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
+GENTESTS = $(MYTESTS:.proto=.proto.php)
+%.proto.php : %.proto protoc-gen-php
+	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
+
+mytest: $(GENTESTS)
+	php --syntax-check protocolbuffers.inc.php; \
+	for file in $(MYTESTS); do \
+		php --syntax-check $${file}.php; \
+	done ;
