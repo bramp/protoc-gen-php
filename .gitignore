@@ -1,18 +1,20 @@
 *.o
 *.pb.cc
 *.pb.h
+*.proto.php
 protoc-gen-php
+reference_app/reference
 
 # http://www.gnu.org/software/automake
 Makefile.in
 Makefile
 
 # http://www.gnu.org/software/autoconf
-/autom4te.cache
-/autoscan.log
-/autoscan-*.log
-/aclocal.m4
-/compile
+autom4te.cache
+autoscan.log
+autoscan-*.log
+aclocal.m4
+compile
 /config.h
 /config.h.in
 /config.log
@@ -20,8 +22,9 @@ Makefile
 /configure
 /configure.scan
 /depcomp
-/.deps
 /install-sh
 /missing
 /stamp-h1
 
+.deps/
+test-driver
