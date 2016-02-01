@@ -186,13 +186,6 @@ void PHPFileGenerator::PrintRead(const Descriptor & message, const FieldDescript
 	for (int i = 0; i < message.field_count(); ++i) {
 		const FieldDescriptor & field = Deref(message.field(i));
 
-/*
-		string var ( VariableName(field.name()));
-		if (field.is_repeated()) {
-			// If repeated field, use the $var[] syntax to append the value to the array
-			var += "[]";
-		}
-*/
 		int wire = -1;
 		string commands;
 
@@ -854,9 +847,9 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor & message) {
 				"public function get`capitalized_name`Array() { return $this->`name`; }\n"
 	
 				// TODO Change the set code to validate input depending on the variable type
-				"public function set`capitalized_name`(int $index, `type`$value) {$this->`name`[$index] = $value;	}\n"
+				"public function set`capitalized_name`(int $index, `type`$value) {$this->`name`[$index] = $value; }\n"
 				"public function add`capitalized_name`(`type`$value) { $this->`name`[] = $value; }\n"
-				"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value;} }\n"
+				"public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value; } }\n"
 			);
 
 		} else if (IsProto2()) {

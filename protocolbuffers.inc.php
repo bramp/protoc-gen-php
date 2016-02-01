@@ -129,32 +129,19 @@ class Protobuf {
 	public static function size_varint($value) {
 		checkArgument(is_int($value), "value must be a integer");
 
-/*		$len = 0;
-		do {
-			$i = $i >> 7;
-			$len++;
-		} while ($i != 0);
-		return $len;
-*/
 		// TODO Rearrange to make a binary search
-		if ($value < 0x80)
-			return 1;
-		if ($value < 0x4000)
-			return 2;
-		if ($value < 0x200000)
-			return 3;
-		if ($value < 0x10000000)
-			return 4;
-		if ($value < 0x800000000)
-			return 5;
-		if ($value < 0x40000000000)
-			return 6;
-		if ($value < 0x2000000000000)
-			return 7;
-		if ($value < 0x100000000000000)
-			return 8;
-		if ($value < 0x8000000000000000)
-			return 9;
+		if ($value < 0) return 10; // Negitive numbers are signed extended and always take 10 bytes
+		if ($value < 0x80) return 1;
+		if ($value < 0x4000) return 2;
+		if ($value < 0x200000) return 3;
+		if ($value < 0x10000000) return 4;
+		if ($value < 0x800000000) return 5;
+		if ($value < 0x40000000000) return 6;
+		if ($value < 0x2000000000000) return 7;
+		if ($value < 0x100000000000000) return 8;
+		if ($value < 0x8000000000000000) return 9;
+
+		return 10;
 	}
 
 	/**
@@ -167,7 +154,6 @@ class Protobuf {
 		checkArgument($encoded !== '', "encoded value contains no bytes");
 
 		$len = strlen($encoded);
-
 		$result = 0;
 		$shift = 0;
 		for ($i = 0; $i < $len; $i++) {
