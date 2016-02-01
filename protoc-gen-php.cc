@@ -204,14 +204,44 @@ void PHPFileGenerator::PrintRead(const Descriptor & message, const FieldDescript
 						   "$this->`name``[]` = $tmp;\n";
 				break;
 
-			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
-			case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
+			// TODO Check the range of all returned values
 			case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
+				wire = 0;
+				commands = "$tmp = `ns`Protobuf::read_signed_varint($fp, `$limit`);\n"
+				           "if ($tmp === false) throw new Exception('Protobuf::read_varint returned false');\n"
+				           "if ($tmp < `ns`Protobuf::MIN_INT32 || $tmp > `ns`Protobuf::MAX_INT32) throw new Exception('int32 out of range');"
+				           "$this->`name``[]` = $tmp;\n";
+				break;
+
+			case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
+				wire = 0;
+				commands = "$tmp = `ns`Protobuf::read_signed_varint($fp, `$limit`);\n"
+				           "if ($tmp === false) throw new Exception('Protobuf::read_varint returned false');\n"
+				           "if ($tmp < `ns`Protobuf::MIN_INT64 || $tmp > `ns`Protobuf::MAX_INT64) throw new Exception('int64 out of range');"
+				           "$this->`name``[]` = $tmp;\n";
+				break;
+
 			case FieldDescriptor::TYPE_UINT32: // uint32, varint on the wire
+				wire = 0;
+				commands = "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
+				           "if ($tmp === false) throw new Exception('Protobuf::read_varint returned false');\n"
+				           "if ($tmp < `ns`Protobuf::MIN_UINT32 || $tmp > `ns`Protobuf::MAX_UINT32) throw new Exception('uint32 out of range');"
+				           "$this->`name``[]` = $tmp;\n";
+				break;
+
+			case FieldDescriptor::TYPE_UINT64: // uint64, varint on the wire.
+				wire = 0;
+				commands = "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
+				           "if ($tmp === false) throw new Exception('Protobuf::read_varint returned false');\n"
+				           "if ($tmp < `ns`Protobuf::MIN_UINT64 || $tmp > `ns`Protobuf::MAX_UINT64) throw new Exception('uint64 out of range');"
+				           "$this->`name``[]` = $tmp;\n";
+				break;
+
 			case FieldDescriptor::TYPE_ENUM:   // Enum, varint on the wire
 				wire = 0;
 				commands = "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
 				           "if ($tmp === false) throw new Exception('Protobuf::read_varint returned false');\n"
+				           // TODO Check $tmp is within the enum range
 				           "$this->`name``[]` = $tmp;\n";
 				break;
 

@@ -6,6 +6,9 @@ function checkArgument($exp, $message) {
 	}
 }
 
+// If you don't care about large numbers, this line can be removed
+assert(PHP_INT_SIZE == 8, "For now we only support PHP on 64bit platforms");
+
 class ProtobufEnum {
 
 	public static function toString($value) {
@@ -103,6 +106,18 @@ class Protobuf {
 	const TYPE_SFIXED64 = 16;  // int64, exactly eight bytes on the wire
 	const TYPE_SINT32   = 17;  // int32, ZigZag-encoded varint on the wire
 	const TYPE_SINT64   = 18;  // int64, ZigZag-encoded varint on the wire
+
+	const MIN_INT32 = -2147483648;
+	const MAX_INT32 =  2147483647;
+
+	const MIN_UINT32 = 0;
+	const MAX_UINT32 = 4294967296;
+
+	const MIN_INT64 = -9223372036854775808;
+	const MAX_INT64 =  9223372036854775807;
+
+	const MIN_UINT64 = 0;
+	const MAX_UINT64 = 18446744073709551616;
 
 	/**
 	 * Returns a string representing this wiretype
