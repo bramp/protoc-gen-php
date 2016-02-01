@@ -31,6 +31,11 @@ protoc-gen-php.cc: php_options.pb.cc php_options.pb.h
 %.pb.cc %.pb.h: %.proto
 	$(PROTOC) --proto_path=$(srcdir) --cpp_out=$(builddir) $(PROTO_INCLUDES) $^
 
+# Renable this, but `make check` doesn't play nice with phpunit
+#TESTS = test
+
+test:
+	phpunit tests/*_test.php
 
 # Useful for testing
 MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
