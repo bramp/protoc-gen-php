@@ -14,7 +14,6 @@
  *  Add extra methods to the built in types, such as a Timestamp Helper
  *  Support proto3 json mapping
  *  Add Reserved support
- *  Add OneOf support
  *  Add Map Support
  *  Add Package (namespace support)
  *  Add proto option for which version of PHP we are targeting
@@ -24,6 +23,12 @@
  *  Add strict checking of UTF-8 in proto3
  *  Add to PEAR and/or Composer
  *  ToString needs a lot of work
+ *  Implement a CodedInputStream and CodedOutputStream 
+ *  Writing packed fields
+ *  Support the autoloading standard
+ *  Format the C++
+ *  Format the PHP
+ *  Have a mode where accurate integers work
  */
 
 // TODO strutil.h is from the offical protobuf source, but it is not installed. Replace it

@@ -4,7 +4,45 @@ PHP Protocol Buffer Generator
 This is a plugin for Google's Protocol Buffer Generator, protoc. It generates PHP code from a .proto file.
 by Andrew Brampton ([bramp.net](http://bramp.net)) (c) 2010,2013
 
-It's not finished, but supports most common features, and I'm currently using it in a production system.
+Supports:
+ * Proto2 and Proto3
+ * All features (Messages, Enums, Oneof, Maps)
+ * Designed to be quick
+ * Passes all compliance tests
+
+Future:
+ * JSON encoding
+ * Support optimize_for=CODE_SIZE
+
+
+Use
+---
+
+Once compiled and installed you can use it via protoc like so:
+
+```
+protoc --php_out=. your.proto
+```
+
+This should generate the file "your.proto.php", which should be able to encode and decode protocol buffer messages. When using the generated PHP code you must include the "protocolbuffers.inc.php" file.
+
+
+Notes on Numbers
+-----
+PHP uses signed integers, and depending on the platform may be 32 bit or 64 bit in size. Additionally PHP is typically compiled with IEEE 754 double precision floating point numbers, but may be compiled with single precision. This causes multiple problems for PHP using large numbers. As such the best appropimation is used when an exact representation is not available. On 32 bit platforms, signed integers are correct between -2^31 and 2^31-1, outside of that range floats are used. Double precision floats maintain integer accurancy up to 2^53, beyond that integers may not be precisce.
+
+
+| Proto type       | PHP type (32 bit)                              | PHP type (64 bit)
+| --------------------------------------------------------------------------------------
+| bool             | bool                                           | bool
+| float / double   | float                                          | float
+| int32            | int                                            | int
+| int64 / uint32   | int (between -2^31 and 2^31-1) otherwise float | int
+| uint64           | int (between -2^31 and 2^31-1) otherwise float | int (between -2^63 and 2^63-1) otherwise float
+| byte / string    | string                                         | string
+| enum             | int                                            | int
+
+
 
 Install
 -------
@@ -27,18 +65,6 @@ make
 sudo make install
 ```
 
-Use
----
-
-Once compiled and installed you can use it via protoc like so:
-
-```
-protoc --php_out=. your.proto
-```
-
-This should generate the file "your.proto.php", which should be able to encode and decode protocol buffer messages. When using the generated PHP code you must include the "protocolbuffers.inc.php" file.
-
-There are many TODOs to finish, for example writing better documentation :)
 
 Licence (Simplified BSD License)
 --------------------------------
