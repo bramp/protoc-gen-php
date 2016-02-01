@@ -50,14 +50,14 @@ class ProtobufMessage {
 	// Reads the protobuf
 	public function read($fp, &$limit = PHP_INT_MAX) {
 		while(!feof($fp) && $limit > 0) {
-			$tag = Protobuf::read_varint($fp, $limit);
+			$tag = self::read_varint($fp, $limit);
 			if ($tag === false)
 				break;
 			$wire  = $tag & 0x07;
 			$field = $tag >> 3;
 
-			$field_idx = $field . '-' . Protobuf::get_wiretype($wire);
-			$this->_unknown[$field_idx][] = Protobuf::read_field($fp, $wire, $limit);
+			$field_idx = $field . '-' . self::get_wiretype($wire);
+			$this->_unknown[$field_idx][] = self::read_field($fp, $wire, $limit);
 		}
 	}
 
@@ -198,7 +198,7 @@ class Protobuf {
 	public static function read_varint($fp, &$limit = PHP_INT_MAX) {
 		$value = '';
 		do { // Keep reading until we find the last byte
-			$b = Protobuf::read_bytes($fp, 1, $limit);
+			$b = self::read_bytes($fp, 1, $limit);
 			if ($b === false) {
 				return false;
 			}
@@ -207,7 +207,7 @@ class Protobuf {
 
 		} while ($b >= "\x80");
 
-		return Protobuf::decode_varint($value);
+		return self::decode_varint($value);
 	}
 
 	/**
@@ -217,7 +217,7 @@ class Protobuf {
 	protected static function read_unpack($fp, $len, $pack, &$limit = PHP_INT_MAX) {
 		checkArgument(is_string($pack), 'pack must be a valid string');
 
-		$bytes = Protobuf::read_bytes($fp, $len, $limit);
+		$bytes = self::read_bytes($fp, $len, $limit);
 		if ($bytes === false) {
 			return false;
 		}
@@ -225,17 +225,17 @@ class Protobuf {
 		return unpack($pack, $bytes)[1];
 	}
 
-	public static function read_float ($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 4, 'f', $limit); } // BUG We need to convert from little order to machine order first
-	public static function read_double($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 8, 'd', $limit); } // BUG We need to convert from little order to machine order first
-	public static function read_int32 ($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 4, 'l', $limit); } // BUG We need to convert from little order to machine order first
-	public static function read_uint32($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 4, 'V', $limit); }
+	public static function read_float ($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 4, 'f', $limit); } // BUG We need to convert from little order to machine order first
+	public static function read_double($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 8, 'd', $limit); } // BUG We need to convert from little order to machine order first
+	public static function read_int32 ($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 4, 'l', $limit); } // BUG We need to convert from little order to machine order first
+	public static function read_uint32($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 4, 'V', $limit); }
 
 	 // unpack 'q' and 'P' are only supported since PHP 5.6.3
-	public static function read_int64 ($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 8, 'q', $limit); } // BUG We need to convert from little order to machine order first
-	public static function read_uint64($fp, &$limit = PHP_INT_MAX) { return Protobuf::read_unpack($fp, 8, 'P', $limit); }
+	public static function read_int64 ($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 8, 'q', $limit); } // BUG We need to convert from little order to machine order first
+	public static function read_uint64($fp, &$limit = PHP_INT_MAX) { return self::read_unpack($fp, 8, 'P', $limit); }
 
 	public static function read_zint32($fp, &$limit = PHP_INT_MAX) {
-		$i = Protobuf::read_varint($fp, $limit);
+		$i = self::read_varint($fp, $limit);
 		if ($i === false) {
 			return false;
 		}
@@ -244,7 +244,7 @@ class Protobuf {
 	}
 
 	public static function read_zint64($fp, &$limit = PHP_INT_MAX) {
-		$i = Protobuf::read_varint($fp, $limit);
+		$i = self::read_varint($fp, $limit);
 		if ($i === false) {
 			return false;
 		}
@@ -316,9 +316,8 @@ class Protobuf {
 	 */
 	public static function write_varint($fp, $value) {
 		checkArgument(get_resource_type($fp) === 'stream', 'fp must be a file resource');
-		// TODO Check it was int/double/float/etc checkArgument(is_int($value), "value must be a integer");
 
-		$buf = Protobuf::encode_varint($value);
+		$buf = self::encode_varint($value);
 		$len = strlen($buf);
 
 		if (fwrite($fp, $buf) !== $len)
@@ -351,17 +350,17 @@ class Protobuf {
 		return $len;
 	}
 
-	public static function write_float ($fp, $f) { return Protobuf::write_pack($fp, $f, 'f'); } // BUG We need to convert from machine order to little order first
-	public static function write_double($fp, $d) { return Protobuf::write_pack($fp, $d, 'd'); } // BUG We need to convert from machine order to little order first
-	public static function write_int32 ($fp, $i) { return Protobuf::write_pack($fp, $i, 'l'); } // BUG We need to convert from machine order to little order first
-	public static function write_uint32($fp, $i) { return Protobuf::write_pack($fp, $i, 'V'); }
+	public static function write_float ($fp, $f) { return self::write_pack($fp, $f, 'f'); } // BUG We need to convert from machine order to little order first
+	public static function write_double($fp, $d) { return self::write_pack($fp, $d, 'd'); } // BUG We need to convert from machine order to little order first
+	public static function write_int32 ($fp, $i) { return self::write_pack($fp, $i, 'l'); } // BUG We need to convert from machine order to little order first
+	public static function write_uint32($fp, $i) { return self::write_pack($fp, $i, 'V'); }
 
 	 // unpack 'q' and 'P' are only supported since PHP 5.6.3
-	public static function write_int64 ($fp, $i) { return Protobuf::write_pack($fp, $i, 'q'); } // BUG We need to convert from machine order to little order first
-	public static function write_uint64($fp, $i) { return Protobuf::write_pack($fp, $i, 'P'); }
+	public static function write_int64 ($fp, $i) { return self::write_pack($fp, $i, 'q'); } // BUG We need to convert from machine order to little order first
+	public static function write_uint64($fp, $i) { return self::write_pack($fp, $i, 'P'); }
 
-	public static function write_zint32($fp, $i) { return Protobuf::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
-	public static function write_zint64($fp, $i) { return Protobuf::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
+	public static function write_zint32($fp, $i) { return self::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
+	public static function write_zint64($fp, $i) { return self::write_varint($fp, ($i>= 0 ? ($i << 1) : (($i << 1) ^ ~0))); }
 
 	/**
 	 * Seek past a varint
@@ -390,18 +389,18 @@ class Protobuf {
 
 		switch ($wire_type) {
 			case 0: // varint
-				return Protobuf::skip_varint($fp);
+				return self::skip_varint($fp);
 
 			case 1: // 64bit
 				if (fseek($fp, 8, SEEK_CUR) === -1)
-					throw new Exception('skip(' . ProtoBuf::get_wiretype(1) . '): Error seeking');
+					throw new Exception('skip(' . self::get_wiretype(1) . '): Error seeking');
 				return 8;
 
 			case 2: // length delimited
 				$varlen = 0;
-				$len = Protobuf::read_varint($fp, $varlen);
+				$len = self::read_varint($fp, $varlen);
 				if (fseek($fp, $len, SEEK_CUR) === -1)
-					throw new Exception('skip(' . ProtoBuf::get_wiretype(2) . '): Error seeking');
+					throw new Exception('skip(' . self::get_wiretype(2) . '): Error seeking');
 				return $len - $varlen;
 
 			//case 3: // Start group TODO we must keep looping until we find the closing end grou
@@ -410,11 +409,11 @@ class Protobuf {
 
 			case 5: // 32bit
 				if (fseek($fp, 4, SEEK_CUR) === -1)
-					throw new Exception('skip('. ProtoBuf::get_wiretype(5) . '): Error seeking');
+					throw new Exception('skip('. self::get_wiretype(5) . '): Error seeking');
 				return 4;
 
 			default:
-				throw new Exception('skip('. ProtoBuf::get_wiretype($wire_type) . '): Unsupported wire_type');
+				throw new Exception('skip('. self::get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
 	}
 
