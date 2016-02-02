@@ -451,7 +451,6 @@ class Protobuf {
 
 		$buf = '';
 		while ($value > 127) {
-			var_dump($value);
 			$buf .= chr(($value & 0x7F) | 0x80);
 			$value = intdiv($value, 128);
 		}

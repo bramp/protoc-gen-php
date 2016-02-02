@@ -122,10 +122,12 @@ class VarintProtobufTest extends ProtobufTestCase {
 	function testWriteVarint() {
 		foreach ($this->tests as $i => $enc) {
 			if (is_string($i)) {
-				$i = (float)$i;
 				// Skip doubles without exact reprentation
-				if ($i + 1 === $i)
+				if (number_format((float)$i, 0, '.', '') !== $i) {
+					//echo "skip want:$i got:" . number_format((float)$i, 0, '.', '')  . "\n";
 					continue;
+				}
+				$i = (float)$i;
 			}
 
 			$this->reset();
