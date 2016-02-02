@@ -38,7 +38,7 @@ PHP uses signed integers, and depending on the platform may be 32 bit or 64 bit 
 | float / double   | float                                          | float
 | int32            | int                                            | int
 | int64 / uint32   | int (between -2^31 and 2^31-1) otherwise float | int
-| uint64           | int (between -2^31 and 2^31-1) otherwise float | int (between -2^63 and 2^63-1) otherwise float
+| uint64           | int (between 0 and 2^31-1) otherwise float     | int (between 0 and 2^63-1) otherwise float
 | byte / string    | string                                         | string
 | enum             | int                                            | int
 

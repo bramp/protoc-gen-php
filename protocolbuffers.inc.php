@@ -9,6 +9,13 @@ function checkArgument($exp, $message) {
 // If you don't care about large numbers, this line can be removed
 assert(PHP_INT_SIZE == 8, "For now we only support PHP on 64bit platforms");
 
+
+if (!function_exists('intdiv')) {
+	function intdiv($a, $b){
+	    return ($a - $a % $b) / $b;
+	}
+}
+
 class ProtobufEnum {
 
 	public static function toString($value) {
@@ -142,19 +149,27 @@ class Protobuf {
 	 * Returns how big (in bytes) this number would be as a varint
 	 */
 	public static function size_varint($value) {
-		checkArgument(is_int($value), "value must be a integer");
+		// TODO Assert 64bit doubles
+		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
 
 		// TODO Rearrange to make a binary search
 		if ($value < 0) return 10; // Negitive numbers are signed extended and always take 10 bytes
-		if ($value < 0x80) return 1;
-		if ($value < 0x4000) return 2;
-		if ($value < 0x200000) return 3;
-		if ($value < 0x10000000) return 4;
-		if ($value < 0x800000000) return 5;
-		if ($value < 0x40000000000) return 6;
-		if ($value < 0x2000000000000) return 7;
-		if ($value < 0x100000000000000) return 8;
-		if ($value < 0x8000000000000000) return 9;
+		if ($value < 0x80) return 1; // 2^7
+		if ($value < 0x4000) return 2; // 2^14
+		if ($value < 0x200000) return 3; // 2^21
+		if ($value < 0x10000000) return 4; // 2^28
+		if ($value < 0x800000000) return 5; // 2^35
+		if ($value < 0x40000000000) return 6; // 2^42
+		if ($value < 0x2000000000000) return 7; // 2^49
+		if ($value < 0x100000000000000) return 8; // 2^56
+
+		if (is_int($value)) {
+			// A PHP int can't be compared to 2^63, so compare to 2^63-1
+			if ($value <= 0x7FFFFFFFFFFFFFFF) return 9;
+		} else {
+			// However, a float can't represent 2^63-1, so in that case compare to 2^32
+			if ($value < 0x8000000000000000) return 9;
+		}
 
 		return 10;
 	}
@@ -169,10 +184,29 @@ class Protobuf {
 		checkArgument($encoded !== '', "encoded value contains no bytes");
 
 		$len = strlen($encoded);
+		if ($len < 10) {
+			return self::decode_varint_int($encoded, $len);
+		} else {
+			return self::decode_varint_float($encoded, $len);
+		}
+	}
+
+	protected static function decode_varint_int($encoded, $len) {
 		$result = 0;
 		$shift = 0;
 		for ($i = 0; $i < $len; $i++) {
 			$result |= ((ord($encoded[$i]) & 0x7F) << $shift);
+			$shift += 7;
+		}
+
+		return $result;
+	}
+
+	protected static function decode_varint_float($encoded, $len) {
+		$result = 0.0;
+		$shift = 0;
+		for ($i = 0; $i < $len; $i++) {
+			$result += (ord($encoded[$i]) & 0x7F) * pow(2, $shift);
 			$shift += 7;
 		}
 
@@ -300,26 +334,113 @@ class Protobuf {
 		}
 	}
 
+	private static function encode_varint_slide($value) {
+		checkArgument(is_int($value), "value must be a integer");
+
+		// Code adapted from CodedOutputStream::WriteVarint64ToArrayInline in
+		// coded_stream.cc original protobuf source
+		// TODO Change to be more PHP-like.
+		$target = array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+  		$part0 = $value & 0xffffffff;
+		$part1 = ($value >> 28) & 0xffffffff;
+		$part2 = ($value >> 56) & 0xffffffff;
+
+		if ($part2 === 0) {
+			if ($part1 === 0) {
+				if ($part0 < (1 << 14)) {
+					if ($part0 < (1 << 7)) {
+						$size = 1; goto size1;
+					} else {
+						$size = 2; goto size2;
+					}
+				} else {
+					if ($part0 < (1 << 21)) {
+						$size = 3; goto size3;
+					} else {
+						$size = 4; goto size4;
+					}
+				}
+			} else {
+				if ($part1 < (1 << 14)) {
+					if ($part1 < (1 << 7)) {
+						$size = 5; goto size5;
+					} else {
+						$size = 6; goto size6;
+					}
+				} else {
+					if ($part1 < (1 << 21)) {
+						$size = 7; goto size7;
+					} else {
+						$size = 8; goto size8;
+					}
+				}
+			}
+		} else {
+			if ($part2 < (1 << 7)) {
+				$size = 9; goto size9;
+			} else {
+				$size = 10; goto size10;
+			}
+		}
+
+		assert(false, "reached a line we should never get to");
+
+		// Slide
+		size10: $target[9] = chr(($part2 >>  7) | 0x80);
+		size9 : $target[8] = chr(($part2      ) | 0x80);
+		size8 : $target[7] = chr(($part1 >> 21) | 0x80);
+		size7 : $target[6] = chr(($part1 >> 14) | 0x80);
+		size6 : $target[5] = chr(($part1 >>  7) | 0x80);
+		size5 : $target[4] = chr(($part1      ) | 0x80);
+		size4 : $target[3] = chr(($part0 >> 21) | 0x80);
+		size3 : $target[2] = chr(($part0 >> 14) | 0x80);
+		size2 : $target[1] = chr(($part0 >>  7) | 0x80);
+		size1 : $target[0] = chr(($part0      ) | 0x80);
+
+		$target[$size-1] = chr(ord($target[$size-1]) & 0x7F);
+
+		$target = array_slice($target, 0, $size);
+		$target = implode($target);
+
+		return $target;
+	}
+
+	protected static function encode_varint_int($value) {
+		checkArgument(is_int($value), "value must be a integer");
+
+		$buf = '';
+		while ($value > 0x7F) {
+			$buf .= chr(($value & 0x7F) | 0x80);
+			$value = $value >> 7;
+		}
+		return $buf . chr($value & 0x7F);
+	}
+
+	protected static function encode_varint_float($value) {
+		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
+
+		$buf = '';
+		while ($value > 127) {
+			var_dump($value);
+			$buf .= chr(($value & 0x7F) | 0x80);
+			$value = intdiv($value, 128);
+		}
+		return $buf . chr($value & 0x7F);
+	}
+
 	/**
 	 * Encodes a int
 	 * @param $value The int to encode
 	 * @returns the bytes of the encoded int
 	 */
 	public static function encode_varint($value) {
-		checkArgument(is_int($value), 'value must be a integer');
+		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
+		checkArgument($value >= 0, 'value must be a positive integer');
 
-		$buf = '';
-		do {
-			$encoded = $value & 0x7F;
-			$value = $value >> 7;
+		return self::encode_varint_float($value);
+	}
 
-			if ($value != 0)
-				$encoded |= 0x80;
-
-			$buf .= chr($encoded);
-		} while ($value != 0);
-
-		return $buf;
 	}
 
 	/**
