@@ -310,27 +310,27 @@ class Protobuf {
 
 		switch ($wire_type) {
 			case 0: // varint
-				return Protobuf::read_varint($fp, $limit); // Decoded value
+				return self::read_varint($fp, $limit); // Decoded value
 
 			case 1: // 64bit
-				return Protobuf::read_bytes($fp, 8, $limit);
+				return self::read_bytes($fp, 8, $limit);
 
 			case 2: // length delimited
-				$len = Protobuf::read_varint($fp, $limit);
+				$len = self::read_varint($fp, $limit);
 				if ($len <= 0) {
-					throw new Exception('read_field('. ProtoBuf::get_wiretype($wire_type) . "): Invalid length: $len it must be >= 0");
+					throw new Exception('read_field('. self::get_wiretype($wire_type) . "): Invalid length: $len it must be >= 0");
 				}
-				return Protobuf::read_bytes($fp, $len, $limit);
+				return self::read_bytes($fp, $len, $limit);
 
 			//case 3: // Start group TODO we must keep looping until we find the closing end grou
 			//case 4: // End group - We should never skip a end group!
 			//	return 0; // Do nothing
 
 			case 5: // 32bit
-				return Protobuf::read_bytes($fp, 4, $limit);
+				return self::read_bytes($fp, 4, $limit);
 
 			default:
-				throw new Exception('read_field('. ProtoBuf::get_wiretype($wire_type) . '): Unsupported wire_type');
+				throw new Exception('read_field('. self::get_wiretype($wire_type) . '): Unsupported wire_type');
 		}
 	}
 
