@@ -37,6 +37,9 @@ protoc-gen-php.cc: php_options.pb.cc php_options.pb.h
 test:
 	phpunit tests/*_test.php
 
+format: protoc-gen-php.cc php_util.cc php_util.h util.cc util.h
+	clang-format -style=google -i $^
+
 # Useful for testing
 MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
 GENTESTS = $(MYTESTS:.proto=.proto.php)
