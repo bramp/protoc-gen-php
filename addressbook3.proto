@@ -1,14 +1,10 @@
 syntax = "proto3";
-package tutorial;
- 
-option java_package = "com.example.tutorial";
-option java_outer_classname = "AddressBookProtos";
 
-option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+package tutorial;
 
 message Person {
   string name = 1;
-  int32 id = 2;  // Unique ID number for this person.
+  int32 id = 2;
   string email = 3;
 
   enum PhoneType {
@@ -22,12 +18,9 @@ message Person {
     PhoneType type = 2;
   }
 
-  repeated PhoneNumber phones = 4;
-
-  repeated int32 test = 5;
+  repeated PhoneNumber phone = 4;
 }
 
-// Our address book file is just one of these.
 message AddressBook {
-  repeated Person people = 1;
+  repeated Person person = 1;
 }

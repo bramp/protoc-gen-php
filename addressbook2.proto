@@ -1,13 +1,10 @@
 syntax = "proto2";
+
 package tutorial;
-
-
-option java_package = "com.example.tutorial";
-option java_outer_classname = "AddressBookProtos";
 
 message Person {
   required string name = 1;
-  required int32 id = 2;        // Unique ID number for this person.
+  required int32 id = 2;
   optional string email = 3;
 
   enum PhoneType {
@@ -22,11 +19,8 @@ message Person {
   }
 
   repeated PhoneNumber phone = 4;
-
-  repeated int32 test = 5;
 }
 
-// Our address book file is just one of these.
 message AddressBook {
   repeated Person person = 1;
 }
