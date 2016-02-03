@@ -505,12 +505,9 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
 
   if (SupportsRequiredValue()) {
     printer_.Print(
+        // TODO Add list of missing fields
         "if (!$this->validate())\n"
-        "  throw new Exception('Required fields are missing');\n"  // TODO Add
-                                                                   // list of
-                                                                   // missing
-                                                                   // fields
-        );
+        "  throw new Exception('Required fields are missing');\n");
   }
 
   map<string, string> variables;
@@ -580,8 +577,7 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
             MakeTag(field.number(), WireFormatLite::WIRETYPE_END_GROUP);
         commands =
             "`var`->write($fp); // group\n"
-            "fwrite($fp, \"" +
-            PHPEscape(endTag) + "\", " + SimpleItoa(endTag.size()) + ");\n";
+            "fwrite($fp, \"" + PHPEscape(endTag) + "\", " + SimpleItoa(endTag.size()) + ");\n";
         break;
       }
       case FieldDescriptor::TYPE_MESSAGE:  // Length-delimited message.
@@ -763,8 +759,8 @@ void PHPFileGenerator::PrintValidate(const Descriptor& message) {
     const FieldDescriptor& field(Deref(message.field(i)));
 
     if (field.is_required()) {
-      printer_.Print("if ($this->`name` === null) return false;\n", "name",
-                     VariableName(field.name()));
+      printer_.Print("if ($this->`name` === null) return false;\n",
+        "name", VariableName(field.name()));
     }
   }
 
@@ -848,9 +844,9 @@ void PHPFileGenerator::PrintOneOfConstants(const Descriptor& message) {
       for (int j = 0; j < oneof.field_count(); ++j) {
         const FieldDescriptor& field(Deref(oneof.field(j)));
 
-        printer_.Print("const `name` = `number`;\n", "name",
-                       OneOfConstant(field.name()), "number",
-                       SimpleItoa(field.number()));
+        printer_.Print("const `name` = `number`;\n",
+          "name", OneOfConstant(field.name()),
+          "number", SimpleItoa(field.number()));
       }
     }
   }
@@ -889,8 +885,7 @@ void PHPFileGenerator::PrintFields(const Descriptor& message) {
     } else if (FieldHasHas(field)) {
       printer_.Print(variables, "private $`name` = null; // `definition`\n");
     } else {
-      printer_.Print(variables,
-                     "private $`name` = `default`; // `definition`\n");
+      printer_.Print(variables, "private $`name` = `default`; // `definition`\n");
     }
   }
 }
@@ -905,16 +900,10 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
     printer_.Print("\n");
 
     printer_.Print(variables,
-                   "public function clear`oneof_capitalized_name`() { "
-                   "$this->`oneof_case` = `oneof_default`; $this->`oneof_name` "
-                   "= null; }\n"
-                   "public function has`oneof_capitalized_name`() { return "
-                   "$this->`oneof_case` !== `oneof_default`; }\n"
-                   "public function get`oneof_capitalized_name`() { "
-                   "if($this->`oneof_case` !== `oneof_default`) return "
-                   "$this->`oneof_name`; else return null; }\n"
-                   "public function get`oneof_capitalized_name`Case() { return "
-                   "$this->`oneof_case`; }\n");
+      "public function clear`oneof_capitalized_name`() { $this->`oneof_case` = `oneof_default`; $this->`oneof_name` = null; }\n"
+      "public function has`oneof_capitalized_name`() { return $this->`oneof_case` !== `oneof_default`; }\n"
+      "public function get`oneof_capitalized_name`() { if($this->`oneof_case` !== `oneof_default`) return $this->`oneof_name`; else return null; }\n"
+      "public function get`oneof_capitalized_name`Case() { return $this->`oneof_case`; }\n");
   }
 
   for (int i = 0; i < message.field_count(); ++i) {
@@ -929,61 +918,39 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
     if (field.containing_oneof() != nullptr) {
       // A oneof field
       printer_.Print(variables,
-                     "public function clear`capitalized_name`() { if "
-                     "($this->`oneof_case` === self::`oneof`) "
-                     "clear`oneof_capitalized_name`(); }\n"
-                     "public function has`capitalized_name`() { return "
-                     "$this->`oneof_case` === self::`oneof`; }\n"
-                     "public function get`capitalized_name`() { "
-                     "if($this->`oneof_case` === self::`oneof`) return "
-                     "$this->`oneof_name`; else return `default`;}\n"
-                     "public function set`capitalized_name`(`type`$value) { "
-                     "$this->`oneof_case` = self::`oneof`; $this->`oneof_name` "
-                     "= $value; }\n");
+        "public function clear`capitalized_name`() { if ($this->`oneof_case` === self::`oneof`) clear`oneof_capitalized_name`(); }\n"
+        "public function has`capitalized_name`() { return $this->`oneof_case` === self::`oneof`; }\n"
+        "public function get`capitalized_name`() { if($this->`oneof_case` === self::`oneof`) return $this->`oneof_name`; else return `default`;}\n"
+        "public function set`capitalized_name`(`type`$value) { $this->`oneof_case` = self::`oneof`; $this->`oneof_name` = $value; }\n");
 
     } else if (field.is_repeated()) {
       // Repeated field
       printer_.Print(variables,
-                     "public function clear`capitalized_name`() { "
-                     "$this->`name` = array(); }\n"
+        "public function clear`capitalized_name`() { $this->`name` = array(); }\n"
 
-                     "public function get`capitalized_name`Count() { return "
-                     "count($this->`name`); }\n"
-                     "public function get`capitalized_name`(int $index) { "
-                     "return $this->`name`[$index]; }\n"
-                     "public function get`capitalized_name`Array() { return "
-                     "$this->`name`; }\n"
+        "public function get`capitalized_name`Count() { return count($this->`name`); }\n"
+        "public function get`capitalized_name`(int $index) { return $this->`name`[$index]; }\n"
+        "public function get`capitalized_name`Array() { return $this->`name`; }\n"
 
-                     // TODO Change the set code to validate input depending on
-                     // the variable type
-                     "public function set`capitalized_name`(int $index, "
-                     "`type`$value) {$this->`name`[$index] = $value; }\n"
-                     "public function add`capitalized_name`(`type`$value) { "
-                     "$this->`name`[] = $value; }\n"
-                     "public function addAll`capitalized_name`(array $values) "
-                     "{ foreach($values as $value) {$this->`name`[] = $value; "
-                     "} }\n");
+        // TODO Change the set code to validate input depending on
+        // the variable type
+        "public function set`capitalized_name`(int $index, `type`$value) {$this->`name`[$index] = $value; }\n"
+        "public function add`capitalized_name`(`type`$value) { $this->`name`[] = $value; }\n"
+        "public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value; }}\n");
 
     } else if (IsProto2()) {
       printer_.Print(variables,
-                     "public function clear`capitalized_name`() { "
-                     "$this->`name` = null; }\n"
-                     "public function has`capitalized_name`() { return "
-                     "$this->`name` !== null; }\n"
-                     "public function get`capitalized_name`() { "
-                     "if($this->`name` !== null) return $this->`name`; else "
-                     "return `default`;}\n"
-                     "public function set`capitalized_name`(`type`$value) { "
-                     "$this->`name` = $value; }\n");
+        "public function clear`capitalized_name`() { $this->`name` = null; }\n"
+        "public function has`capitalized_name`() { return $this->`name` !== null; }\n"
+        "public function get`capitalized_name`() { if($this->`name` !== null) return $this->`name`; else return `default`;}\n"
+        "public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n");
 
     } else {
       printer_.Print(
-          variables,
-          "public function clear`capitalized_name`() { $this->`name` = "
-          "`default`; }\n"
-          "public function get`capitalized_name`() { return $this->`name`;}\n"
-          "public function set`capitalized_name`(`type`$value) { $this->`name` "
-          "= $value; }\n");
+        variables,
+        "public function clear`capitalized_name`() { $this->`name` = `default`; }\n"
+        "public function get`capitalized_name`() { return $this->`name`;}\n"
+        "public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n");
     }
   }
 }
@@ -1052,7 +1019,7 @@ void PHPFileGenerator::PrintMessage(const Descriptor& message) {
   printer_.Print(
       "\n"  // TODO add comments
       "public function __construct($in = NULL, &$limit = PHP_INT_MAX) {\n"
-      "	parent::__construct($in, $limit);\n"
+      "  parent::__construct($in, $limit);\n"
       "}\n");
 
   // All the methods
@@ -1077,7 +1044,8 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   printer_.Print(
       "// enum `full_name`\n"
       "class `name` extends ProtobufEnum {\n",
-      "full_name", e.full_name(), "name", ClassName(e));
+      "full_name", e.full_name(),
+      "name", ClassName(e));
 
   printer_.Indent();
 
@@ -1085,9 +1053,9 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   for (int j = 0; j < e.value_count(); ++j) {
     const EnumValueDescriptor& value(*e.value(j));
 
-    printer_.Print("const `name` = `number`;\n", "name",
-                   UpperString(value.name()), "number",
-                   SimpleItoa(value.number()));
+    printer_.Print("const `name` = `number`;\n",
+      "name", UpperString(value.name()),
+      "number", SimpleItoa(value.number()));
   }
 
   // Print values array
@@ -1096,9 +1064,9 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   for (int j = 0; j < e.value_count(); ++j) {
     const EnumValueDescriptor& value(*e.value(j));
 
-    printer_.Print("`number` => self::`name`,\n", "number",
-                   SimpleItoa(value.number()), "name",
-                   UpperString(value.name()));
+    printer_.Print("`number` => self::`name`,\n",
+      "number", SimpleItoa(value.number()),
+      "name", UpperString(value.name()));
   }
   printer_.Outdent();
   printer_.Print(");\n\n");
@@ -1163,15 +1131,15 @@ bool PHPFileGenerator::Generate(string* error) {
     for (int i = 0; i < file_.dependency_count(); i++) {
       const FileDescriptor& dep_file(Deref(file_.dependency(i)));
 
-      printer_.Print("require('`filename`');\n", "filename",
-                     FileDescriptorToPath(dep_file).c_str());
+      printer_.Print("require('`filename`');\n",
+        "filename", FileDescriptorToPath(dep_file).c_str());
     }
 
     printer_.Print("\n");
 
     if (!namespace_.empty()) {
-      printer_.Print("namespace `namespace` {\n", "namespace",
-                     namespace_.c_str());
+      printer_.Print("namespace `namespace` {\n",
+        "namespace", namespace_.c_str());
       printer_.Indent();
     }
 
