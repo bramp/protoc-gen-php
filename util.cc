@@ -1,18 +1,18 @@
 #include "util.h"
 
-// TODO strutil.h is from the offical protobuf source, but it is not installed. Replace it
-//      We use LowerString, UpperString, SimpleItoa, CEscape from it.
-#include "strutil.h" 
+// TODO strutil.h is from the offical protobuf source, but it is not installed.
+// Replace it
+//      We use LowerString, UpperString, SimpleItoa from it.
+#include "strutil.h"
 
-#include <cstdio> // for sprintf
+#include <cstdio>  // for sprintf
 #include <map>
 #include <string>
 #include <algorithm>
 #include <iostream>
 
 using google::protobuf::UpperString;
-using google::protobuf::LowerString; 
-
+using google::protobuf::LowerString;
 
 string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   string result;
@@ -45,25 +45,23 @@ string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   return result;
 }
 
-string LowerString(const string & s) {
-  string newS (s);
+string LowerString(const string& s) {
+  string newS(s);
   LowerString(&newS);
   return newS;
 }
 
-string UpperString(const string & s) {
-  string newS (s);
+string UpperString(const string& s) {
+  string newS(s);
   UpperString(&newS);
   return newS;
 }
 
-string TrimString(const string & s) {
-	string whitespace = " \t\r\n";
-	size_t startpos = s.find_first_not_of(whitespace);
-	size_t endpos = s.find_last_not_of(whitespace);
-	if( startpos == string::npos )
-		startpos = 0;
-	if( endpos == string::npos )
-		endpos = s.length();
-	return s.substr(startpos, endpos - startpos);
+string TrimString(const string& s) {
+  string whitespace = " \t\r\n";
+  size_t startpos = s.find_first_not_of(whitespace);
+  size_t endpos = s.find_last_not_of(whitespace);
+  if (startpos == string::npos) startpos = 0;
+  if (endpos == string::npos) endpos = s.length();
+  return s.substr(startpos, endpos - startpos);
 }
