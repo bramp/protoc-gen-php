@@ -30,10 +30,20 @@ string DefaultValueAsString(const FieldDescriptor &field);
 // Maps a message full_name into a PHP name
 template <class DescriptorType>
 string ClassName(const DescriptorType &descriptor) {
-  string name(descriptor.full_name());
-  replace(name.begin(), name.end(), '.', '_');
-  return name;
+	const string & package = Deref(descriptor.file()).package();
+	
+	string name(descriptor.full_name());
+
+	// Remove the package name if it exists
+	if (true && !package.empty()) {
+		name = name.substr(package.length() + 1);
+	}
+
+	replace(name.begin(), name.end(), '.', '_');
+	return name;
 }
+
+string NamespaceName(const FileDescriptor &f);
 
 // Returns the member name
 // TODO Make this smarter to avoid illegal names

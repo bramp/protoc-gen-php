@@ -5,7 +5,6 @@
  * TODO
  *  Extensions
  *  Services
- *  Packages
  *  Better validation (add code to check setted values are valid)
  *  option optimize_for = CODE_SIZE/SPEED;
  *  Place field names in the generated exceptions
@@ -15,7 +14,7 @@
  *  Support proto3 json mapping
  *  Add Reserved support
  *  Add Map Support
- *  Add Package (namespace support)
+ *  Add Package (namespace support) PHP 5.3 uses namespace, Before uses _ class names.
  *  Add proto option for which version of PHP we are targeting
  *  If PHP>7 Add more type hints to the generated code.
  *  Add write_bytes(...)
@@ -120,6 +119,10 @@ class PHPFileGenerator {
     return file_.syntax() == FileDescriptor::SYNTAX_PROTO3;
   }
 
+  int TargetPHP() const {
+    return 53; // TODO Make configurable
+  }
+
   // Does this protobuf support the required field
   bool SupportsRequiredValue() const { return IsProto2(); }
 
@@ -131,8 +134,6 @@ class PHPFileGenerator {
   const string& parameter_;
 
   const PHPFileOptions& options_;
-  const string namespace_;
-  const char* ns_;
 };
 
 PHPFileGenerator::PHPFileGenerator(io::Printer& printer,
@@ -143,9 +144,7 @@ PHPFileGenerator::PHPFileGenerator(io::Printer& printer,
       parameter_(parameter),
 
       // Parse the file options
-      options_(file.options().GetExtension(php)),
-      namespace_(options_.namespace_()),
-      ns_(namespace_.empty() ? "" : "\\") {
+      options_(file.options().GetExtension(php)) {
   (void)parameter_;  // Unused
 }
 
@@ -163,14 +162,14 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
   printer_.Indent();
 
   printer_.Print(
-      "$tag = `ns`Protobuf::read_varint($fp, $limit);\n"
+      "$tag = Protobuf::read_varint($fp, $limit);\n"
       "if ($tag === false) break;\n"
       "$wire  = $tag & 0x07;\n"
       "$field = $tag >> 3;\n"
       //"var_dump(\"`name`: Found field: '$field' type: '\" .
-      //`ns`Protobuf::get_wiretype($wire) . \"' $limit bytes left\");\n"
+      //Protobuf::get_wiretype($wire) . \"' $limit bytes left\");\n"
       "switch($field) {\n",
-      "name", ClassName(message), "ns", ns_);
+      "name", ClassName(message));
   printer_.Indent();
 
   // If we are a group message, we need to add a end group case
@@ -194,8 +193,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                           // wire
         wire = 1;
         commands =
-            "$tmp = `ns`Protobuf::read_double($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_double "
+            "$tmp = Protobuf::read_double($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_double "
             "returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
@@ -204,9 +203,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                          // wire.
         wire = 5;
         commands =
-            "$tmp = `ns`Protobuf::read_float($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_float "
-            "returned false');\n"
+            "$tmp = Protobuf::read_float($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_float returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -214,57 +212,45 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
       case FieldDescriptor::TYPE_INT32:  // int32, varint on the wire.
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_signed_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
-            "if ($tmp < `ns`Protobuf::MIN_INT32 || $tmp > "
-            "`ns`Protobuf::MAX_INT32) throw new Exception('int32 out of "
-            "range');"
+            "$tmp = Protobuf::read_signed_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
+            // TODO The below test doesn't work right on 32bit PHP
+            "if ($tmp < Protobuf::MIN_INT32 || $tmp > Protobuf::MAX_INT32) throw new \\Exception('int32 out of range');"
             "$this->`name``[]` = $tmp;\n";
         break;
 
       case FieldDescriptor::TYPE_INT64:  // int64, varint on the wire.
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_signed_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
-            "if ($tmp < `ns`Protobuf::MIN_INT64 || $tmp > "
-            "`ns`Protobuf::MAX_INT64) throw new Exception('int64 out of "
-            "range');"
+            "$tmp = Protobuf::read_signed_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
+            "if ($tmp < Protobuf::MIN_INT64 || $tmp > Protobuf::MAX_INT64) throw new \\Exception('int64 out of range');"
             "$this->`name``[]` = $tmp;\n";
         break;
 
       case FieldDescriptor::TYPE_UINT32:  // uint32, varint on the wire
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
-            "if ($tmp < `ns`Protobuf::MIN_UINT32 || $tmp > "
-            "`ns`Protobuf::MAX_UINT32) throw new Exception('uint32 out of "
-            "range');"
+            "$tmp = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
+            "if ($tmp < Protobuf::MIN_UINT32 || $tmp > Protobuf::MAX_UINT32) throw new \\Exception('uint32 out of range');"
             "$this->`name``[]` = $tmp;\n";
         break;
 
       case FieldDescriptor::TYPE_UINT64:  // uint64, varint on the wire.
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
-            "if ($tmp < `ns`Protobuf::MIN_UINT64 || $tmp > "
-            "`ns`Protobuf::MAX_UINT64) throw new Exception('uint64 out of "
-            "range');"
+            "$tmp = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
+            "if ($tmp < Protobuf::MIN_UINT64 || $tmp > Protobuf::MAX_UINT64) throw new \\Exception('uint64 out of range');"
             "$this->`name``[]` = $tmp;\n";
         break;
 
       case FieldDescriptor::TYPE_ENUM:  // Enum, varint on the wire
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
+            "$tmp = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
             // TODO Check $tmp is within the enum range
             "$this->`name``[]` = $tmp;\n";
         break;
@@ -273,9 +259,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                            // wire.
         wire = 1;
         commands =
-            "$tmp = `ns`Protobuf::read_uint64($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_unint64 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_uint64($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_unint64 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -283,9 +268,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                             // wire
         wire = 1;
         commands =
-            "$tmp = `ns`Protobuf::read_int64($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_int64 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_int64($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_int64 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -293,9 +277,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                            // wire.
         wire = 5;
         commands =
-            "$tmp = `ns`Protobuf::read_uint32($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_uint32 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_uint32($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_uint32 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -303,18 +286,16 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                             // wire
         wire = 5;
         commands =
-            "$tmp = `ns`Protobuf::read_int32($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_int32 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_int32($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_int32 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
       case FieldDescriptor::TYPE_BOOL:  // bool, varint on the wire.
         wire = 0;
         commands =
-            "$tmp = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
+            "$tmp = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
             "$this->`name``[]` = ($tmp > 0) ? true : false;\n";
         break;
 
@@ -322,12 +303,10 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
       case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
         wire = 2;
         commands =
-            "$len = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($len === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
-            "$tmp = `ns`Protobuf::read_bytes($fp, $len, `$limit`);\n"
-            "if ($tmp === false) throw new Exception(\"read_bytes($len) "
-            "returned false\");\n"
+            "$len = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($len === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
+            "$tmp = Protobuf::read_bytes($fp, $len, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception(\"read_bytes($len) returned false\");\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -343,15 +322,11 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
         const Descriptor& d(Deref(field.message_type()));
         wire = 2;
         commands =
-            "$len = `ns`Protobuf::read_varint($fp, `$limit`);\n"
-            "if ($len === false) throw new Exception('Protobuf::read_varint "
-            "returned false');\n"
+            "$len = Protobuf::read_varint($fp, `$limit`);\n"
+            "if ($len === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
             "`$limit` -= $len;\n"
-            "$this->`name``[]` = new " +
-            ClassName(d) +
-            "($fp, $len);\n"
-            "if ($len !== 0) throw new Exception('new " +
-            ClassName(d) + " did not read the full length');\n";
+            "$this->`name``[]` = new " + ClassName(d) + "($fp, $len);\n"
+            "if ($len !== 0) throw new \\Exception('new " + ClassName(d) + " did not read the full length');\n";
         break;
       }
 
@@ -359,9 +334,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                           // wire
         wire = 5;
         commands =
-            "$tmp = `ns`Protobuf::read_zint32($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_zint32 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_zint32($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_zint32 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -369,9 +343,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
                                           // wire
         wire = 1;
         commands =
-            "$tmp = `ns`Protobuf::read_zint64($fp, `$limit`);\n"
-            "if ($tmp === false) throw new Exception('Protobuf::read_zint64 "
-            "returned false');\n"
+            "$tmp = Protobuf::read_zint64($fp, `$limit`);\n"
+            "if ($tmp === false) throw new \\Exception('Protobuf::read_zint64 returned false');\n"
             "$this->`name``[]` = $tmp;\n";
         break;
 
@@ -382,7 +355,6 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
 
     map<string, string> variables;
     FieldVariables(field, variables);
-    variables["ns"] = ns_;
     variables["$limit"] = "$limit";
 
     printer_.Print("case `index`: // `definition`\n", "index",
@@ -397,7 +369,7 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
 
       printer_.Print(
           "if($wire !== 2 && $wire !== `wire`) {\n"
-          "  throw new Exception(\"Incorrect wire format for field $field, "
+          "  throw new \\Exception(\"Incorrect wire format for field $field, "
           "expected: 2 or `wire` got: $wire\");\n"
           "}\n"
           "if ($wire === `wire`) {\n",
@@ -425,7 +397,7 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
     } else {
       printer_.Print(
           "if($wire !== `wire`) {\n"
-          "  throw new Exception(\"Incorrect wire format for field $field, "
+          "  throw new \\Exception(\"Incorrect wire format for field $field, "
           "expected: `wire` got: $wire\");\n"
           "}\n",
           "wire", SimpleItoa(wire));
@@ -441,11 +413,11 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
     printer_.Outdent();
   }
 
-  if (options_.skip_unknown()) {
+  if (options_.skip_unknown()) { // TODO proto2 allows unknown, but proto3 drops them.
     printer_.Print(
         "default:\n"
-        "  $limit -= `ns`Protobuf::skip_field($fp, $wire);\n",
-        "name", ClassName(message), "ns", ns_);
+        "  $limit -= Protobuf::skip_field($fp, $wire);\n",
+        "name", ClassName(message));
   } else {
     // TODO This fails to parse packed fields
     printer_.Print(
@@ -464,8 +436,7 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
 
   if (SupportsRequiredValue()) {
     printer_.Print(
-        "if (!$this->validate()) throw new Exception('Required fields are "
-        "missing');\n");
+        "if (!$this->validate()) throw new \\Exception('Required fields are missing');\n");
   }
 
   printer_.Outdent();
@@ -506,7 +477,7 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
     printer_.Print(
         // TODO Add list of missing fields
         "if (!$this->validate())\n"
-        "  throw new Exception('Required fields are missing');\n");
+        "  throw new \\Exception('Required fields are missing');\n");
   }
 
   map<string, string> variables;
@@ -522,12 +493,12 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
     switch (field.type()) {
       case FieldDescriptor::TYPE_DOUBLE:  // double, exactly eight bytes on the
                                           // wire
-        commands = "`ns`Protobuf::write_double($fp, `var`);\n";
+        commands = "Protobuf::write_double($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_FLOAT:  // float, exactly four bytes on the
                                          // wire.
-        commands = "`ns`Protobuf::write_float($fp, `var`);\n";
+        commands = "Protobuf::write_float($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_INT64:   // int64, varint on the wire.
@@ -535,38 +506,38 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
       case FieldDescriptor::TYPE_INT32:   // int32, varint on the wire.
       case FieldDescriptor::TYPE_UINT32:  // uint32, varint on the wire
       case FieldDescriptor::TYPE_ENUM:    // Enum, varint on the wire
-        commands = "`ns`Protobuf::write_varint($fp, `var`);\n";
+        commands = "Protobuf::write_varint($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_FIXED64:  // uint64, exactly eight bytes on the
                                            // wire.
-        commands = "`ns`Protobuf::write_uint64($fp, `var`);\n";
+        commands = "Protobuf::write_uint64($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_SFIXED64:  // int64, exactly eight bytes on the
                                             // wire
-        commands = "`ns`Protobuf::write_int64($fp, `var`);\n";
+        commands = "Protobuf::write_int64($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_FIXED32:  // uint32, exactly four bytes on the
                                            // wire.
-        commands = "`ns`Protobuf::write_uint32($fp, `var`);\n";
+        commands = "Protobuf::write_uint32($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_SFIXED32:  // int32, exactly four bytes on the
                                             // wire
-        commands = "`ns`Protobuf::write_int32($fp, `var`);\n";
+        commands = "Protobuf::write_int32($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_BOOL:  // bool, varint on the wire.
         // TODO Change to be raw encoded values for 1 and 0
-        commands = "`ns`Protobuf::write_varint($fp, `var` ? 1 : 0);\n";
+        commands = "Protobuf::write_varint($fp, `var` ? 1 : 0);\n";
         break;
 
       case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
       case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
         commands =
-            "`ns`Protobuf::write_varint($fp, strlen(`var`));\n"
+            "Protobuf::write_varint($fp, strlen(`var`));\n"
             "fwrite($fp, `var`);\n";
         break;
 
@@ -581,26 +552,24 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
       }
       case FieldDescriptor::TYPE_MESSAGE:  // Length-delimited message.
         commands =
-            "`ns`Protobuf::write_varint($fp, `var`->size());\n"
+            "Protobuf::write_varint($fp, `var`->size());\n"
             "`var`->write($fp);\n";
         break;
 
       case FieldDescriptor::TYPE_SINT32:  // int32, ZigZag-encoded varint on the
                                           // wire
-        commands = "`ns`Protobuf::write_zint32($fp, `var`);\n";
+        commands = "Protobuf::write_zint32($fp, `var`);\n";
         break;
 
       case FieldDescriptor::TYPE_SINT64:  // int64, ZigZag-encoded varint on the
                                           // wire
-        commands = "`ns`Protobuf::write_zint64($fp, `var`);\n";
+        commands = "Protobuf::write_zint64($fp, `var`);\n";
         break;
 
       default:
         // TODO use the proper exception
         throw "Error " + field.full_name() + ": Unsupported type";
     }
-
-    variables["ns"] = ns_;  // TODO Is this already in the map?
 
     if (field.is_repeated()) {
       // TODO If we store default values in the repeated field, we will seralise
@@ -668,7 +637,7 @@ void PHPFileGenerator::PrintSize(const Descriptor& message) {
           len++;  // A bool will always take 1 byte
           command = "$size += `len`;\n";
         } else {
-          command = "$size += `len` + `ns`Protobuf::size_varint(`var`);\n";
+          command = "$size += `len` + Protobuf::size_varint(`var`);\n";
         }
         break;
 
@@ -689,7 +658,7 @@ void PHPFileGenerator::PrintSize(const Descriptor& message) {
           command = "$l = strlen(`var`);\n";
         }
 
-        command += "$size += `len` + `ns`Protobuf::size_varint($l) + $l;\n";
+        command += "$size += `len` + Protobuf::size_varint($l) + $l;\n";
         break;
 
       case WireFormatLite::WIRETYPE_START_GROUP:
@@ -705,7 +674,6 @@ void PHPFileGenerator::PrintSize(const Descriptor& message) {
     }
 
     variables["len"] = SimpleItoa(len);
-    variables["ns"] = ns_;
 
     if (field.is_repeated()) {
       // TODO Support packed size
@@ -787,12 +755,11 @@ void PHPFileGenerator::PrintToString(const Descriptor& message) {
 
     variables.clear();
     FieldVariables(oneof, variables);
-    variables["ns"] = ns_;
 
     printer_.Print(variables,
-                   "\n     . `ns`Protobuf::toString('`oneof_field`_case', "
+                   "\n     . Protobuf::toString('`oneof_field`_case', "
                    "$this->`oneof_case`, `oneof_default`)"
-                   "\n     . `ns`Protobuf::toString('`oneof_field`', "
+                   "\n     . Protobuf::toString('`oneof_field`', "
                    "$this->`oneof_name`, null)");
   }
 
@@ -804,22 +771,21 @@ void PHPFileGenerator::PrintToString(const Descriptor& message) {
     }
 
     FieldVariables(field, variables);
-    variables["ns"] = ns_;
 
     printer_.Print(
         variables,
-        "\n     . `ns`Protobuf::toString('`field`', $this->`name`, `default`)");
+        "\n     . Protobuf::toString('`field`', $this->`name`, `default`)");
     /*
                     if (field.type() == FieldDescriptor::TYPE_ENUM) {
                             variables["enum"] =
        ClassName(Deref(field.enum_type()));
                             printer_.Print(variables,
-                                    "\n     . `ns`Protobuf::toString('`field`',
+                                    "\n     . Protobuf::toString('`field`',
        `enum`::toString($this->`name`))"
                             );
                     } else {
                             printer_.Print(variables,
-                                    "\n     . `ns`Protobuf::toString('`field`',
+                                    "\n     . Protobuf::toString('`field`',
        $this->`name`)"
                             );
                     }
@@ -1125,27 +1091,34 @@ bool PHPFileGenerator::Generate(string* error) {
         "//   require('`filename`');\n",
         "filename", php_filename.c_str());
 
-    // TODO Move the following into a method
-    for (int i = 0; i < file_.dependency_count(); i++) {
-      const FileDescriptor& dep_file(Deref(file_.dependency(i)));
-
-      printer_.Print("require('`filename`');\n",
-        "filename", FileDescriptorToPath(dep_file).c_str());
-    }
-
     printer_.Print("\n");
 
-    if (!namespace_.empty()) {
-      printer_.Print("namespace `namespace` {\n",
-        "namespace", namespace_.c_str());
+    if (TargetPHP() >= 53 && !file_.package().empty()) {
+      // If we are using namespaces, we assume autoloading
+      printer_.Print(
+        "namespace `namespace` {\n"
+        "  use Protobuf;\n"
+        "  use ProtobufEnum;\n"
+        "  use ProtobufMessage;\n",
+
+        "namespace", NamespaceName(file_).c_str()); 
       printer_.Indent();
+    } else {
+      // TODO Move the following into a method
+      for (int i = 0; i < file_.dependency_count(); i++) {
+        const FileDescriptor& dep_file(Deref(file_.dependency(i)));
+
+        printer_.Print("require('`filename`');\n",
+          "filename", FileDescriptorToPath(dep_file).c_str());
+      }
+
     }
 
     PrintEnums();
     PrintMessages();
     PrintServices();
 
-    if (!namespace_.empty()) {
+    if (TargetPHP() >= 53 && !file_.package().empty()) {
       printer_.Outdent();
       printer_.Print("}");
     }

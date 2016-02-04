@@ -28,15 +28,16 @@ string FileDescriptorToPath(const FileDescriptor &file) {
   return file.name() + ".php";
 }
 
-bool FieldHasHas(const FieldDescriptor &field) {
-  return (Deref(field.file()).syntax() == FileDescriptor::SYNTAX_PROTO2) ||
-         field.containing_oneof();
-}
-
 string OneOfConstant(const string &s) { return UpperString(s); }
 
 string VariableName(const string &s) { return UnderscoresToCamelCase(s); }
 
+string NamespaceName(const FileDescriptor &f) {
+  // TODO Ensure namespace is PHP friendly.
+  string name(f.package());
+  replace(name.begin(), name.end(), '.', '\\');
+  return name;
+}
 
 string DefaultValueAsString(
     const FieldDescriptor
