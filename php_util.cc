@@ -75,7 +75,7 @@ string PHPEscape(const string &a) {
   dest.reserve(a.size() * 4);  // Maximum possible expansion
 
   for (size_t i = 0; i < a.size(); i++) {
-    char c = a[i];
+    unsigned char c = a[i];
 
     if ((c >= 0 && c <= 31) || c >= 127) {
       char buf[16];
