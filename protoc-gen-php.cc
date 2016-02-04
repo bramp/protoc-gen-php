@@ -17,7 +17,7 @@
  *  Add Package (namespace support) PHP 5.3 uses namespace, Before uses _ class names.
  *  Add proto option for which version of PHP we are targeting
  *  Add write_bytes(...)
- *  Cleanup write/size code
+ *  Cleanup write/size/skip code
  *  Add strict checking of UTF-8 in proto3
  *  Add to PEAR and/or Composer
  *  ToString needs a lot of work
@@ -34,6 +34,7 @@
  *  Write out unknown fields
  *  Check if we correctly reference remote namespaces
  *  Add code to check all the included protobuf code was generated for the same version of PHP
+ *  Add a codec field, that says how exactly to encode/decode
  */
 
 #include "php_generator.h"
