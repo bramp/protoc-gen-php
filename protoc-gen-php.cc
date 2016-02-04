@@ -14,10 +14,8 @@
  *  Support proto3 json mapping
  *  Add Reserved support
  *  Add Map Support
- *  Add Package (namespace support) PHP 5.3 uses namespace, Before uses _ class names.
- *  Add proto option for which version of PHP we are targeting
  *  Add write_bytes(...)
- *  Cleanup write/size/skip code
+ *  Cleanup write/size code
  *  Add strict checking of UTF-8 in proto3
  *  Add to PEAR and/or Composer
  *  ToString needs a lot of work
@@ -25,14 +23,11 @@
  *  Writing packed fields
  *  Support the autoloading standard
  *  Format the PHP
- *  Have a mode where accurate integers work
- *  Use namespace correctly
+ *  Have a mode where accurate integers work (using GMP or something)
  *  Add a clear() method
  *  PSR-1/2
- *    Namespaces
  *    Four space indent
  *  Write out unknown fields
- *  Check if we correctly reference remote namespaces
  *  Add code to check all the included protobuf code was generated for the same version of PHP
  *  Add a codec field, that says how exactly to encode/decode
  */
