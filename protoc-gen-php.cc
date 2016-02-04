@@ -451,9 +451,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
     printer_.Print(
         "default:\n"
         "  $field_idx = $field . '-' . Protobuf::get_wiretype($wire);\n"
-        "  $this->_unknown[$field_idx][] = `ns`Protobuf::read_field($fp, "
-        "$wire, $limit);\n",
-        "name", ClassName(message), "ns", ns_);
+        "  $this->_unknown[$field_idx][] = Protobuf::read_varint_bytes($fp, $wire, $limit);\n",
+        "name", ClassName(message));
   }
 
   printer_.Outdent();
@@ -778,8 +777,7 @@ void PHPFileGenerator::PrintToString(const Descriptor& message) {
 
   if (!options_.skip_unknown()) {
     printer_.Print(
-        "\n     . `ns`Protobuf::toString('unknown', $this->_unknown, array())",
-        "ns", ns_);
+        "\n     . Protobuf::toString('unknown', $this->_unknown, array())");
   }
 
   map<string, string> variables;
@@ -1059,7 +1057,7 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   }
 
   // Print values array
-  printer_.Print("\npublic static $values_ = array(\n");
+  printer_.Print("\npublic static $_values = array(\n");
   printer_.Indent();
   for (int j = 0; j < e.value_count(); ++j) {
     const EnumValueDescriptor& value(*e.value(j));
@@ -1074,7 +1072,7 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   printer_.Print(  // TODO Move this into a base enum class - but check how
                    // static functions are inhertieted
       "public static function isValid($value) {\n"
-      "  return array_key_exists($value, self::$values_);\n"
+      "  return array_key_exists($value, self::$_values);\n"
       "}\n\n");
 
   // Print a toString. // TODO Change to __toString()
@@ -1082,8 +1080,8 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
       "public static function toString($value) {\n"
       "  checkArgument(is_int($value), 'value must be a integer');\n"
       //"  if (is_null($value)) return null;\n"
-      "  if (array_key_exists($value, self::$values_))\n"
-      "    return self::$values_[$value];\n"
+      "  if (array_key_exists($value, self::$_values))\n"
+      "    return self::$_values[$value];\n"
       "  return 'UNKNOWN';\n"
       "}\n");
 

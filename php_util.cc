@@ -35,7 +35,8 @@ bool FieldHasHas(const FieldDescriptor &field) {
 
 string OneOfConstant(const string &s) { return UpperString(s); }
 
-string VariableName(const string &s) { return UnderscoresToCamelCase(s) + '_'; }
+string VariableName(const string &s) { return UnderscoresToCamelCase(s); }
+
 
 string DefaultValueAsString(
     const FieldDescriptor

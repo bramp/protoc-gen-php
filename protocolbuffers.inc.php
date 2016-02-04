@@ -57,8 +57,8 @@ class ProtobufEnum {
 	}
 }
 
-class ProtobufMessage {
-	private $_unknown; // TODO Should this be here?
+abstract class ProtobufMessage {
+	private $_unknown;
 
 	function __construct($fp = NULL, &$limit = PHP_INT_MAX) {
 		// Zero arguments, so construct a empty one
