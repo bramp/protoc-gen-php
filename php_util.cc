@@ -14,6 +14,8 @@
 #include <google/protobuf/wire_format_lite_inl.h>
 
 // TODO Replace the following:
+using google::protobuf::UpperString;
+using google::protobuf::LowerString;
 using google::protobuf::SimpleItoa;
 using google::protobuf::SimpleFtoa;
 using google::protobuf::SimpleDtoa;
@@ -23,43 +25,6 @@ using google::protobuf::internal::WireFormat;  // TODO Should I be using
 
 string FileDescriptorToPath(const FileDescriptor &file) {
   return file.name() + ".php";
-}
-
-string DefaultValueAsString( const FieldDescriptor &field) {
-  switch (field.cpp_type()) {
-    case FieldDescriptor::CPPTYPE_INT32:
-      return SimpleItoa(field.default_value_int32());
-
-    case FieldDescriptor::CPPTYPE_INT64:
-      return SimpleItoa(field.default_value_int64());
-
-    case FieldDescriptor::CPPTYPE_UINT32:
-      return SimpleItoa(field.default_value_uint32());
-
-    case FieldDescriptor::CPPTYPE_UINT64:
-      return SimpleItoa(field.default_value_uint64());
-
-    case FieldDescriptor::CPPTYPE_FLOAT:
-      return SimpleFtoa(field.default_value_float());
-
-    case FieldDescriptor::CPPTYPE_DOUBLE:
-      return SimpleDtoa(field.default_value_double());
-
-    case FieldDescriptor::CPPTYPE_BOOL:
-      return field.default_value_bool() ? "true" : "false";
-
-    case FieldDescriptor::CPPTYPE_STRING:
-      return "\"" + PHPEscape(field.default_value_string()) + "\"";
-
-    case FieldDescriptor::CPPTYPE_ENUM:
-      return ClassName(*field.enum_type()) + "::" +
-             field.default_value_enum()->name();
-
-    case FieldDescriptor::CPPTYPE_MESSAGE:
-      return "null";
-  }
-
-  assert(false);  // Every field has a default type, we are missing one
 }
 
 string UnderscoresToCamelCase(const string &s) {
@@ -134,11 +99,6 @@ string OneLineDefinition(const string &definition) {
   return TrimString(definition);
 }
 
-
-using google::protobuf::UpperString;
-using google::protobuf::LowerString;
-
-
 string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
   string result;
   // Note:  I distrust ctype.h due to locales.
@@ -201,4 +161,5 @@ string MakeTag(int field_number, WireFormatLite::WireType type) {
   int tagLen = tmp - tag;
   return string((const char *)tag, tagLen);
 }
+
 

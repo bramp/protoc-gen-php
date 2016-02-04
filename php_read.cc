@@ -169,7 +169,7 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
         const Descriptor& d(Deref(field.message_type()));
         wire = 3;
         commands =
-            "$this->`name``[]` = new " + ClassName(d) + "($fp, `$limit`);\n";
+            "$this->`name``[]` = new " + FullClassName(d) + "($fp, `$limit`);\n";
         break;
       }
 
@@ -180,8 +180,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
             "$len = Protobuf::read_varint($fp, `$limit`);\n"
             "if ($len === false) throw new \\Exception('Protobuf::read_varint returned false');\n"
             "`$limit` -= $len;\n"
-            "$this->`name``[]` = new " + ClassName(d) + "($fp, $len);\n"
-            "if ($len !== 0) throw new \\Exception('new " + ClassName(d) + " did not read the full length');\n";
+            "$this->`name``[]` = new " + FullClassName(d) + "($fp, $len);\n"
+            "if ($len !== 0) throw new \\Exception('new " + FullClassName(d) + " did not read the full length');\n";
         break;
       }
 

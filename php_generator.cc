@@ -19,6 +19,41 @@ PHPFileGenerator::PHPFileGenerator(io::Printer& printer,
 
 PHPFileGenerator::~PHPFileGenerator() {}
 
+string PHPFileGenerator::DefaultValueAsString(const FieldDescriptor &field) {
+  switch (field.cpp_type()) {
+    case FieldDescriptor::CPPTYPE_INT32:
+      return SimpleItoa(field.default_value_int32());
+
+    case FieldDescriptor::CPPTYPE_INT64:
+      return SimpleItoa(field.default_value_int64());
+
+    case FieldDescriptor::CPPTYPE_UINT32:
+      return SimpleItoa(field.default_value_uint32());
+
+    case FieldDescriptor::CPPTYPE_UINT64:
+      return SimpleItoa(field.default_value_uint64());
+
+    case FieldDescriptor::CPPTYPE_FLOAT:
+      return SimpleFtoa(field.default_value_float());
+
+    case FieldDescriptor::CPPTYPE_DOUBLE:
+      return SimpleDtoa(field.default_value_double());
+
+    case FieldDescriptor::CPPTYPE_BOOL:
+      return field.default_value_bool() ? "true" : "false";
+
+    case FieldDescriptor::CPPTYPE_STRING:
+      return "\"" + PHPEscape(field.default_value_string()) + "\"";
+
+    case FieldDescriptor::CPPTYPE_ENUM:
+      return ClassName(*field.enum_type()) + "::" + field.default_value_enum()->name();
+
+    case FieldDescriptor::CPPTYPE_MESSAGE:
+      return "null";
+  }
+
+  assert(false);  // Every field has a default type, we are missing one
+}
 
 void PHPFileGenerator::FieldVariables(const OneofDescriptor &oneof,
                     map<string, string> &variables) {
@@ -83,7 +118,7 @@ bool PHPFileGenerator::Generate(string* error) {
     printer_.Print("\n");
 
     if (UseNamespaces() && !file_.package().empty()) {
-      // If we are using namespaces, we assume autoloading
+      // If we are using namespaces
       printer_.Print(
         "namespace `namespace` {\n"
         "  use Protobuf;\n"
@@ -92,15 +127,15 @@ bool PHPFileGenerator::Generate(string* error) {
 
         "namespace", NamespaceName(file_).c_str()); 
       printer_.Indent();
-    } else {
-      // TODO Move the following into a method
-      for (int i = 0; i < file_.dependency_count(); i++) {
-        const FileDescriptor& dep_file(Deref(file_.dependency(i)));
+    }
 
-        printer_.Print("require('`filename`');\n",
-          "filename", FileDescriptorToPath(dep_file).c_str());
-      }
+    // TODO Wrap the following in option that asks about autoloading
+    // TODO Move the following into a method
+    for (int i = 0; i < file_.dependency_count(); i++) {
+      const FileDescriptor& dep_file(Deref(file_.dependency(i)));
 
+      printer_.Print("require('`filename`');\n",
+        "filename", FileDescriptorToPath(dep_file).c_str());
     }
 
     PrintEnums();

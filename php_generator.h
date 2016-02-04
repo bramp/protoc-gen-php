@@ -78,7 +78,7 @@ class PHPFileGenerator {
   // Does this protobuf support the required field
   bool SupportsRequiredValue() const { return IsProto2(); }
 
-  // Should we be using a namespace
+  // Should we be using PHP namespaces
   bool UseNamespaces() const { return TargetPHP() >= 53; }
 
   //
@@ -88,15 +88,53 @@ class PHPFileGenerator {
     return IsProto2() || field.containing_oneof();
   }
 
+  string DefaultValueAsString(const FieldDescriptor &field);
+
   // TODO Make these smarter to avoid illegal names
   string OneOfConstant(const string &s) { return UpperString(s); }
   string VariableName(const string &s) { return UnderscoresToCamelCase(s); }
 
+  // Maps a package name to a PHP namespace
+  // `package a.b.c` => namespace a\b\c
   string NamespaceName(const FileDescriptor &f) {
     // TODO Ensure namespace is PHP friendly.
     string name(f.package());
     replace(name.begin(), name.end(), '.', '\\');
     return name;
+  }
+
+  // Maps a message full_name into a PHP name
+  // `ns.Foo.Bar` turns into:
+  //   `Foo_Bar`    (with namespaces)
+  //   `ns_Foo_Bar` (without)
+  template <class DescriptorType>
+  string ClassName(const DescriptorType &descriptor) {
+    const string & package = Deref(descriptor.file()).package();
+
+    string name(descriptor.full_name());
+
+    // Remove the package name if it exists
+    if (UseNamespaces() && !package.empty()) {
+      name = name.substr(package.length() + 1);
+    }
+
+    replace(name.begin(), name.end(), '.', '_');
+    return name;
+  }
+
+  // Maps a message full_name into a PHP name
+  // `ns.Foo.Bar` turns into:
+  //   `ns\Foo_Bar` (with namespaces)
+  //   `ns_Foo_Bar` (without)
+  string FullClassName(const Descriptor& message) {
+    const FileDescriptor & file( Deref(message.file()) );
+
+    // Remove the package name if it exists
+    if (UseNamespaces() && !file.package().empty()) {
+      return "\\" + NamespaceName(file) + "\\" + ClassName(message);
+    }
+
+    return ClassName(message);
   }
 
   void FieldVariables(const FieldDescriptor &field, map<string, string> &variables);
