@@ -1028,9 +1028,9 @@ void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   for (int j = 0; j < e.value_count(); ++j) {
     const EnumValueDescriptor& value(*e.value(j));
 
-    printer_.Print("`number` => self::`name`,\n",
+    printer_.Print("`number` => \"`name`\",\n",
       "number", SimpleItoa(value.number()),
-      "name", UpperString(value.name()));
+      "name", PHPEscape(value.name()));
   }
   printer_.Outdent();
   printer_.Print(");\n\n");
