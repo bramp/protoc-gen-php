@@ -41,9 +41,9 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
 
     printer_.Print(variables,
       "public function clear`oneof_capitalized_name`() { $this->`oneof_case` = `oneof_default`; $this->`oneof_name` = null; }\n"
-      "public function has`oneof_capitalized_name`() { return $this->`oneof_case` !== `oneof_default`; }\n"
+      "public function has`oneof_capitalized_name`()`bool_return_type` { return $this->`oneof_case` !== `oneof_default`; }\n"
       "public function get`oneof_capitalized_name`() { if($this->`oneof_case` !== `oneof_default`) return $this->`oneof_name`; else return null; }\n"
-      "public function get`oneof_capitalized_name`Case() { return $this->`oneof_case`; }\n");
+      "public function get`oneof_capitalized_name`Case()`oneof_case_return_type` { return $this->`oneof_case`; }\n");
   }
 
   for (int i = 0; i < message.field_count(); ++i) {
@@ -59,8 +59,8 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
       // A oneof field
       printer_.Print(variables,
         "public function clear`capitalized_name`() { if ($this->`oneof_case` === self::`oneof`) clear`oneof_capitalized_name`(); }\n"
-        "public function has`capitalized_name`() { return $this->`oneof_case` === self::`oneof`; }\n"
-        "public function get`capitalized_name`() { if($this->`oneof_case` === self::`oneof`) return $this->`oneof_name`; else return `default`;}\n"
+        "public function has`capitalized_name`()`bool_return_type` { return $this->`oneof_case` === self::`oneof`; }\n"
+        "public function get`capitalized_name`()`return_type` { if($this->`oneof_case` === self::`oneof`) return $this->`oneof_name`; else return `default`;}\n"
         "public function set`capitalized_name`(`type`$value) { $this->`oneof_case` = self::`oneof`; $this->`oneof_name` = $value; }\n");
 
     } else if (field.is_repeated()) {
@@ -68,28 +68,28 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
       printer_.Print(variables,
         "public function clear`capitalized_name`() { $this->`name` = array(); }\n"
 
-        "public function get`capitalized_name`Count() { return count($this->`name`); }\n"
-        "public function get`capitalized_name`(int $index) { return $this->`name`[$index]; }\n"
-        "public function get`capitalized_name`Array() { return $this->`name`; }\n"
+        "public function get`capitalized_name`Count()`int_return_type` { return count($this->`name`); }\n"
+        "public function get`capitalized_name`(`int_type`$index)`return_type` { return $this->`name`[$index]; }\n"
+        "public function get`capitalized_name`Array()`array_return_type` { return $this->`name`; }\n"
 
         // TODO Change the set code to validate input depending on
         // the variable type
-        "public function set`capitalized_name`(int $index, `type`$value) {$this->`name`[$index] = $value; }\n"
+        "public function set`capitalized_name`(`int_type`$index, `type`$value) {$this->`name`[$index] = $value; }\n"
         "public function add`capitalized_name`(`type`$value) { $this->`name`[] = $value; }\n"
-        "public function addAll`capitalized_name`(array $values) { foreach($values as $value) {$this->`name`[] = $value; }}\n");
+        "public function addAll`capitalized_name`(`array_type`$values) { foreach($values as $value) {$this->`name`[] = $value; }}\n");
 
     } else if (IsProto2()) {
       printer_.Print(variables,
         "public function clear`capitalized_name`() { $this->`name` = null; }\n"
-        "public function has`capitalized_name`() { return $this->`name` !== null; }\n"
-        "public function get`capitalized_name`() { if($this->`name` !== null) return $this->`name`; else return `default`;}\n"
+        "public function has`capitalized_name`()`bool_return_type` { return $this->`name` !== null; }\n"
+        "public function get`capitalized_name`()`return_type` { if($this->`name` !== null) return $this->`name`; else return `default`;}\n"
         "public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n");
 
-    } else {
+    } else { // IsProto3
       printer_.Print(
         variables,
         "public function clear`capitalized_name`() { $this->`name` = `default`; }\n"
-        "public function get`capitalized_name`() { return $this->`name`;}\n"
+        "public function get`capitalized_name`()`return_type` { return $this->`name`;}\n"
         "public function set`capitalized_name`(`type`$value) { $this->`name` = $value; }\n");
     }
   }

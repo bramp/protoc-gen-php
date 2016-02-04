@@ -65,6 +65,104 @@ void PHPFileGenerator::FieldVariables(const OneofDescriptor &oneof,
   variables["oneof_definition"] = OneLineDefinition(oneof.DebugString());
   variables["oneof_default"] = "self::NONE";
   variables["oneof_field"] = oneof.name();
+
+  if (TargetPHP() >= 70) {
+    variables["oneof_case_type"] = "int ";
+    variables["oneof_case_return_type"] = ": int";
+    variables["bool_return_type"] = ": bool";
+
+  } else {
+    variables["oneof_case_type"] = "";
+    variables["oneof_case_return_type"] = "";
+    variables["bool_return_type"] = "";
+  }
+  
+}
+
+void PHPFileGenerator::TypeHintingFieldVariables(const FieldDescriptor &field,
+                          map<string, string> &variables) {
+
+  // Type hinting related to this field
+  variables["type"] = "";
+  variables["return_type"] = "";
+
+  // Generic type hints
+  variables["int_type"] = "";
+  variables["array_return_type"] = "";
+  variables["bool_return_type"] = "";
+  variables["int_return_type"] = "";
+
+
+  if (TargetPHP() >= 50) {
+    // Only "class names supported"
+    if (field.type() == FieldDescriptor::TYPE_MESSAGE || field.type() == FieldDescriptor::TYPE_GROUP) {
+      variables["type"] = FullClassName(Deref(field.message_type())) + " ";
+    }
+  }
+
+  if (TargetPHP() >= 70) {
+    // PHP 7.0 supports many primiatives, and return types
+
+    variables["int_type"] = "int ";
+    variables["array_return_type"] = ": array";
+    variables["bool_return_type"] = ": bool";
+    variables["int_return_type"] = ": int";
+
+    switch (field.type()) {
+      //      TODO If PHP>7 enums should be type checked as a int
+      case FieldDescriptor::TYPE_ENUM:
+        variables["type"] = "int ";
+        variables["return_type"] = ": int";
+        break;
+
+      case FieldDescriptor::TYPE_BOOL:
+        variables["type"] = "bool ";
+        variables["return_type"] = ": bool";
+
+        break;
+
+      case FieldDescriptor::TYPE_FLOAT:
+      case FieldDescriptor::TYPE_DOUBLE:
+        variables["type"] = "float ";
+        variables["return_type"] = ": float";
+        break;
+
+      case FieldDescriptor::TYPE_STRING:  // UTF-8 text.
+      case FieldDescriptor::TYPE_BYTES:   // Arbitrary byte array.
+        variables["type"] = "string ";
+        variables["return_type"] = ": string";
+
+      case FieldDescriptor::TYPE_MESSAGE:
+      case FieldDescriptor::TYPE_GROUP:
+        variables["return_type"] = ": " + FullClassName(Deref(field.message_type()));
+        break;
+
+      case FieldDescriptor::TYPE_SINT32:
+      case FieldDescriptor::TYPE_SINT64:
+      case FieldDescriptor::TYPE_FIXED64:
+      case FieldDescriptor::TYPE_SFIXED64:
+      case FieldDescriptor::TYPE_FIXED32:
+      case FieldDescriptor::TYPE_SFIXED32:
+      case FieldDescriptor::TYPE_INT32:
+      case FieldDescriptor::TYPE_INT64:
+      case FieldDescriptor::TYPE_UINT32:
+      case FieldDescriptor::TYPE_UINT64:
+        // Do nothing because many ints could be int or float (due to PHP's limitations)
+        break;
+    }
+  }
+
+  if (TargetPHP() >= 51) {
+    // Since 5.1 array type supported. We put this last, so it can replace any repeated types, with array
+    variables["array_type"] = "array ";
+    if(field.is_repeated()) {
+      variables["type"] = "array ";
+      if (TargetPHP() >= 70) {
+        variables["return_type"] = ": array";
+      }
+    }
+  }
+
 }
 
 // Returns a map of variables related to this field
@@ -85,20 +183,7 @@ void PHPFileGenerator::FieldVariables(const FieldDescriptor &field,
     FieldVariables(Deref(field.containing_oneof()), variables);
   }
 
-  switch (field.type()) {
-    //      TODO If PHP>7 enums should be type checked as a int
-    //      case FieldDescriptor::TYPE_ENUM:
-    //        variables["type"] = "int ";
-    //        break;
-
-    case FieldDescriptor::TYPE_MESSAGE:
-    case FieldDescriptor::TYPE_GROUP:
-      variables["type"] = ClassName(Deref(field.message_type())) + " ";
-      break;
-
-    default:
-      variables["type"] = "";
-  }
+  TypeHintingFieldVariables(field, variables);
 }
 
 

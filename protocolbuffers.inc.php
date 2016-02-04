@@ -90,8 +90,7 @@ abstract class ProtobufMessage {
 	public function read($fp, &$limit = PHP_INT_MAX) {
 		while(!feof($fp) && $limit > 0) {
 			$tag = self::read_varint($fp, $limit);
-			if ($tag === false)
-				break;
+			if ($tag === false) break;
 			$wire  = $tag & 0x07;
 			$field = $tag >> 3;
 
@@ -555,40 +554,36 @@ abstract class Protobuf {
 	public static function skip_varint($fp) {
 		checkArgument(get_resource_type($fp) === 'stream', 'fp must be a file resource');
 
-		$len = 0;
-		do { // Keep reading until we find the last byte
-			$b = fread($fp, 1);
-			if ($b === false)
-				throw new Exception('skip(varint): Error reading byte');
-			$len++;
-		} while ($b >= "\x80");
-
-		return $len;
+		$value = self::read_varint_bytes($fp);
+		if ($value === false) {
+			return false;
+		}
 	}
 
 	/**
 	 * Seek past the current field
 	 * TODO Rewrite this to be safer
 	 */
-	public static function skip_field($fp, $wire_type) {
+	public static function skip_field($fp, $wire_type, &$limit = PHP_INT_MAX) {
 		checkArgument(get_resource_type($fp) === 'stream', 'fp must be a file resource');
 		checkArgument(is_int($wire_type), 'wire_type must be a integer');
 
 		switch ($wire_type) {
 			case 0: // varint
-				return self::skip_varint($fp);
+				$tmp = self::skip_varint($fp, $limit);
+				if ($tmp === false) throw new \Exception('Protobuf::skip_varint returned false');
 
 			case 1: // 64bit
 				if (fseek($fp, 8, SEEK_CUR) === -1)
 					throw new Exception('skip(' . self::get_wiretype(1) . '): Error seeking');
-				return 8;
+				$limit -= 8;
 
 			case 2: // length delimited
-				$varlen = 0;
-				$len = self::read_varint($fp, $varlen);
+				$len = self::read_varint($fp, $limit);
+				if ($len === false) throw new \Exception('Protobuf::read_varint returned false');
 				if (fseek($fp, $len, SEEK_CUR) === -1)
 					throw new Exception('skip(' . self::get_wiretype(2) . '): Error seeking');
-				return $len - $varlen;
+				$limit -= $len;
 
 			//case 3: // Start group TODO we must keep looping until we find the closing end grou
 			//case 4: // End group - We should never skip a end group!
@@ -597,7 +592,7 @@ abstract class Protobuf {
 			case 5: // 32bit
 				if (fseek($fp, 4, SEEK_CUR) === -1)
 					throw new Exception('skip('. self::get_wiretype(5) . '): Error seeking');
-				return 4;
+				$limit -= 4;
 
 			default:
 				throw new Exception('skip('. self::get_wiretype($wire_type) . '): Unsupported wire_type');

@@ -137,6 +137,7 @@ class PHPFileGenerator {
     return ClassName(message);
   }
 
+  void TypeHintingFieldVariables(const FieldDescriptor &field, map<string, string> &variables);
   void FieldVariables(const FieldDescriptor &field, map<string, string> &variables);
   void FieldVariables(const OneofDescriptor &oneof, map<string, string> &variables);
 

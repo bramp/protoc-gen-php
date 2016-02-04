@@ -16,7 +16,6 @@
  *  Add Map Support
  *  Add Package (namespace support) PHP 5.3 uses namespace, Before uses _ class names.
  *  Add proto option for which version of PHP we are targeting
- *  If PHP>7 Add more type hints to the generated code.
  *  Add write_bytes(...)
  *  Cleanup write/size code
  *  Add strict checking of UTF-8 in proto3
