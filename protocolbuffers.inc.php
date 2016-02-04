@@ -269,11 +269,9 @@ class Protobuf {
 	}
 
 	/**
-	 * Tries to read a varint from $fp.
-	 * @returns the decoded varint from the stream, or false if the stream has reached eof.
-	 * @throws exception if stream error occurs
+	 * Reads a varint but does not decode
 	 */
-	public static function read_varint($fp, &$limit = PHP_INT_MAX) {
+	public static function read_varint_bytes($fp, &$limit = PHP_INT_MAX) {
 		$value = '';
 		do { // Keep reading until we find the last byte
 			$b = self::read_bytes($fp, 1, $limit);
@@ -282,9 +280,21 @@ class Protobuf {
 			}
 
 			$value .= $b;
-
 		} while ($b >= "\x80");
 
+		return $value;
+	}
+
+	/**
+	 * Tries to read a varint from $fp.
+	 * @returns the decoded varint from the stream, or false if the stream has reached eof.
+	 * @throws exception if stream error occurs
+	 */
+	public static function read_varint($fp, &$limit = PHP_INT_MAX) {
+		$value = self::read_varint_bytes($fp, $limit);
+		if ($value === false) {
+			return false;
+		}
 		return self::decode_varint($value);
 	}
 
@@ -339,7 +349,7 @@ class Protobuf {
 
 		switch ($wire_type) {
 			case 0: // varint
-				return self::read_varint($fp, $limit); // Decoded value
+				return self::read_varint_bytes($fp, $limit);
 
 			case 1: // 64bit
 				return self::read_bytes($fp, 8, $limit);

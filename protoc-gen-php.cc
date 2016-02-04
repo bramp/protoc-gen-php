@@ -423,7 +423,7 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
     printer_.Print(
         "default:\n"
         "  $field_idx = $field . '-' . Protobuf::get_wiretype($wire);\n"
-        "  $this->_unknown[$field_idx][] = Protobuf::read_varint_bytes($fp, $wire, $limit);\n",
+        "  $this->_unknown[$field_idx][] = Protobuf::read_field($fp, $wire, $limit);\n",
         "name", ClassName(message));
   }
 
