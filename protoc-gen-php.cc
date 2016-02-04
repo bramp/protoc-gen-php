@@ -364,8 +364,8 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
 
     if (field.is_packable()) {  // is_repeated() && IsTypePackable(type())
 
-      assert(wire == 0 || wire == 1 ||
-             wire == 5);  // the packable value can only be a primitive type
+      // the packable value can only be a primitive type
+      assert(wire == 0 || wire == 1 || wire == 5);
 
       printer_.Print(
           "if($wire !== 2 && $wire !== `wire`) {\n"
