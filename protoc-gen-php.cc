@@ -951,7 +951,7 @@ void PHPFileGenerator::PrintMessage(const Descriptor& message) {
   // Start printing the message
   printer_.Print(
       "// `type` `full_name`\n"
-      "class `name` extends ProtobufMessage {\n",
+      "final class `name` extends ProtobufMessage {\n",
       "name", ClassName(message), "type", type, "full_name",
       message.full_name());
   printer_.Indent();
@@ -1007,7 +1007,7 @@ void PHPFileGenerator::PrintMessage(const Descriptor& message) {
 void PHPFileGenerator::PrintEnum(const EnumDescriptor& e) {
   printer_.Print(
       "// enum `full_name`\n"
-      "class `name` extends ProtobufEnum {\n",
+      "abstract class `name` extends ProtobufEnum {\n",
       "full_name", e.full_name(),
       "name", ClassName(e));
 

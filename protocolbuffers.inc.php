@@ -45,7 +45,7 @@ if (!function_exists('intdiv')) {
 	}
 }
 
-class ProtobufEnum {
+abstract class ProtobufEnum {
 
 	public static function toString($value) {
 		checkArgument(is_int($value), 'value must be a integer');
@@ -100,6 +100,10 @@ abstract class ProtobufMessage {
 		}
 	}
 
+	abstract public function write($fp);
+	abstract public function size();
+
+
 	// TODO Rename this
 	public function toProtobuf() {
 		$fp = fopen('php://temp', 'w+b');
@@ -117,7 +121,7 @@ abstract class ProtobufMessage {
  * @author Andrew Brampton
  *
  */
-class Protobuf {
+abstract class Protobuf {
 
 	const TYPE_DOUBLE   = 1;   // double, exactly eight bytes on the wire.
 	const TYPE_FLOAT    = 2;   // float, exactly four bytes on the wire.
