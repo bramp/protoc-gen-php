@@ -302,6 +302,13 @@ abstract class Protobuf {
 		return self::decode_varint($value);
 	}
 
+	public static function read_signed_varint($fp, &$limit = PHP_INT_MAX) {
+		$value = self::read_varint($fp, $limit);
+		if ($value > self::MAX_INT32) {
+			return self::signed_extension($value);;
+		}
+	}
+
 	/**
 	 * @returns a integer as specified by the pack variable.
 	 * On EOF false is returned, otherwise Exception is thrown on stream error or invalid argument.
@@ -483,6 +490,8 @@ abstract class Protobuf {
 		return self::encode_varint_float($value);
 	}
 
+	public static function signed_extension($value) { // TODO This it the wrong name
+		return ~$value + 1;
 	}
 
 	/**

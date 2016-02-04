@@ -12,6 +12,7 @@ using google::protobuf::uint8;
 using google::protobuf::FileDescriptor;
 using google::protobuf::FieldDescriptor;
 using google::protobuf::OneofDescriptor;
+
 using google::protobuf::internal::WireFormatLite;  // TODO Should I be using
                                                    // internal?
 
@@ -21,6 +22,13 @@ T &Deref(T *t) {
   return *t;
 }
 
+
+/**
+* Returns the path to the generated file for this FileDescriptor
+*/
+string FileDescriptorToPath(const FileDescriptor &file);
+
+string OneLineDefinition(const string &definition);
 //
 // Helper methods for turning Protobufs into PHP types
 //
@@ -43,30 +51,17 @@ string ClassName(const DescriptorType &descriptor) {
 	return name;
 }
 
-string NamespaceName(const FileDescriptor &f);
-
-// Returns the member name
-// TODO Make this smarter to avoid illegal names
-string VariableName(const string &s);
-
-// Returns the constant used for this field
-string OneOfConstant(const string &s);
-
-string FileDescriptorToPath(const FileDescriptor &file);
-
 string UnderscoresToCamelCase(const string &s);
 string UnderscoresToCapitalizedCamelCase(const string &s);
 
 string ArrayToPHPString(const uint8 *a, size_t len);
 string PHPEscape(const string &a);
 
+string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter);
+
+string LowerString(const string& s);
+string UpperString(const string& s);
+string TrimString(const string& s);
+
 string MakeTag(const FieldDescriptor &field);
 string MakeTag(int field_number, WireFormatLite::WireType type);
-
-// Does this field have a hasX method
-bool FieldHasHas(const FieldDescriptor &field);
-
-void FieldVariables(const OneofDescriptor &oneof,
-                    map<string, string> &variables);
-void FieldVariables(const FieldDescriptor &field,
-                    map<string, string> &variables);

@@ -21,27 +21,11 @@ using google::protobuf::scoped_array;
 using google::protobuf::internal::WireFormat;  // TODO Should I be using
                                                // internal?
 
-/**
- * Returns the path to the generated file for this FileDescriptor
- */
 string FileDescriptorToPath(const FileDescriptor &file) {
   return file.name() + ".php";
 }
 
-string OneOfConstant(const string &s) { return UpperString(s); }
-
-string VariableName(const string &s) { return UnderscoresToCamelCase(s); }
-
-string NamespaceName(const FileDescriptor &f) {
-  // TODO Ensure namespace is PHP friendly.
-  string name(f.package());
-  replace(name.begin(), name.end(), '.', '\\');
-  return name;
-}
-
-string DefaultValueAsString(
-    const FieldDescriptor
-        &field) {  // TODO check on the need for quote_string_type
+string DefaultValueAsString( const FieldDescriptor &field) {
   switch (field.cpp_type()) {
     case FieldDescriptor::CPPTYPE_INT32:
       return SimpleItoa(field.default_value_int32());
@@ -150,55 +134,65 @@ string OneLineDefinition(const string &definition) {
   return TrimString(definition);
 }
 
-void FieldVariables(const OneofDescriptor &oneof,
-                    map<string, string> &variables) {
-  variables["name"] = VariableName(oneof.name());  // TODO Is this a bug?
-  variables["oneof_name"] = VariableName(oneof.name());
-  variables["oneof_case"] = "_" + VariableName(oneof.name()) + "case";
-  variables["oneof_capitalized_name"] =
-      UnderscoresToCapitalizedCamelCase(oneof.name());
-  variables["oneof_definition"] = OneLineDefinition(oneof.DebugString());
-  variables["oneof_default"] = "self::NONE";
-  variables["oneof_field"] = oneof.name();
+
+using google::protobuf::UpperString;
+using google::protobuf::LowerString;
+
+
+string UnderscoresToCamelCaseImpl(const string& input, bool cap_next_letter) {
+  string result;
+  // Note:  I distrust ctype.h due to locales.
+  for (size_t i = 0; i < input.size(); i++) {
+    if ('a' <= input[i] && input[i] <= 'z') {
+      if (cap_next_letter) {
+        result += input[i] + ('A' - 'a');
+      } else {
+        result += input[i];
+      }
+      cap_next_letter = false;
+    } else if ('A' <= input[i] && input[i] <= 'Z') {
+      if (i == 0 && !cap_next_letter) {
+        // Force first letter to lower-case unless explicitly told to
+        // capitalize it.
+        result += input[i] + ('a' - 'A');
+      } else {
+        // Capital letters after the first are left as-is.
+        result += input[i];
+      }
+      cap_next_letter = false;
+    } else if ('0' <= input[i] && input[i] <= '9') {
+      result += input[i];
+      cap_next_letter = true;
+    } else {
+      cap_next_letter = true;
+    }
+  }
+  return result;
 }
 
-// Returns a map of variables related to this field
-void FieldVariables(const FieldDescriptor &field,
-                    map<string, string> &variables) {
-  variables.clear();
+string LowerString(const string& s) {
+  string newS(s);
+  LowerString(&newS);
+  return newS;
+}
 
-  variables["name"] = VariableName(field.name());
-  variables["[]"] = field.is_repeated() ? "[]" : "";
-  variables["definition"] = OneLineDefinition(field.DebugString());
-  variables["default"] = DefaultValueAsString(field);
-  variables["capitalized_name"] =
-      UnderscoresToCapitalizedCamelCase(field.name());
-  variables["field"] = field.name();
+string UpperString(const string& s) {
+  string newS(s);
+  UpperString(&newS);
+  return newS;
+}
 
-  if (field.containing_oneof()) {
-    variables["oneof"] = OneOfConstant(field.name());
-    FieldVariables(Deref(field.containing_oneof()), variables);
-  }
-
-  switch (field.type()) {
-    //      TODO If PHP>7 enums should be type checked as a int
-    //      case FieldDescriptor::TYPE_ENUM:
-    //        variables["type"] = "int ";
-    //        break;
-
-    case FieldDescriptor::TYPE_MESSAGE:
-    case FieldDescriptor::TYPE_GROUP:
-      variables["type"] = ClassName(Deref(field.message_type())) + " ";
-      break;
-
-    default:
-      variables["type"] = "";
-  }
+string TrimString(const string& s) {
+  string whitespace = " \t\r\n";
+  size_t startpos = s.find_first_not_of(whitespace);
+  size_t endpos = s.find_last_not_of(whitespace);
+  if (startpos == string::npos) startpos = 0;
+  if (endpos == string::npos) endpos = s.length();
+  return s.substr(startpos, endpos - startpos);
 }
 
 string MakeTag(const FieldDescriptor &field) {
-  return MakeTag(field.number(),
-                 WireFormat::WireTypeForFieldType(field.type()));
+  return MakeTag(field.number(), WireFormat::WireTypeForFieldType(field.type()));
 }
 
 string MakeTag(int field_number, WireFormatLite::WireType type) {
@@ -207,3 +201,4 @@ string MakeTag(int field_number, WireFormatLite::WireType type) {
   int tagLen = tmp - tag;
   return string((const char *)tag, tagLen);
 }
+
