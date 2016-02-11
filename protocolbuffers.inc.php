@@ -45,6 +45,22 @@ if (!function_exists('intdiv')) {
 	}
 }
 
+abstract class ProtobufIO {
+	public static function toStream($in, &$limit = PHP_INT_MAX) {
+		// If the input is a string, turn it into a stream and decode it
+		if (is_string($in)) {
+			$limit = min($limit, strlen($in));
+			$fp = fopen('php://temp', 'w+b');
+			fwrite($fp, $in, $limit);
+			rewind($fp);
+			return $fp;
+		}
+
+		checkArgument(get_resource_type($in) === 'stream', 'fp must be a string or file resource');
+		return $in;
+	}
+}
+
 abstract class ProtobufEnum {
 
 	public static function toString($value) {
@@ -66,28 +82,13 @@ abstract class ProtobufMessage {
 			return;
 		}
 
-		// If the input is a string, turn it into a stream and decode it
-		if (is_string($fp)) {
-			$str = $fp;
-			$limit = min($limit, strlen($str));
-			$fp = fopen('php://temp', 'w+b');
-			fwrite($fp, $str, $limit);
-			rewind($fp);
-
-		} else {
-			checkArgument(get_resource_type($fp) === 'stream', 'fp must be a string or file resource');
-		}
-
 		// Decode
 		$this->read($fp, $limit);
-
-		// If we opened the stream, then close it
-		if (isset($str))
-			fclose($fp);
 	}
 
 	// Reads the protobuf
-	public function read($fp, &$limit = PHP_INT_MAX) {
+	public function read($in, &$limit = PHP_INT_MAX) {
+		$fp = ProtobufIO::toStream($in, $limit);
 		while(!feof($fp) && $limit > 0) {
 			$tag = self::read_varint($fp, $limit);
 			if ($tag === false) break;

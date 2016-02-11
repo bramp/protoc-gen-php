@@ -13,7 +13,9 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
       "public function read($fp, &$limit = PHP_INT_MAX) {\n");
   printer_.Indent();
 
-  printer_.Print("while(!feof($fp) && $limit > 0) {\n");
+  printer_.Print(
+    "$fp = ProtobufIO::toStream($fp, $limit);\n"
+    "while(!feof($fp) && $limit > 0) {\n");
   printer_.Indent();
 
   printer_.Print(
