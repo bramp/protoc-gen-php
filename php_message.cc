@@ -73,7 +73,7 @@ void PHPFileGenerator::PrintMessage(const Descriptor& message) {
   // Constructor
   printer_.Print(
       "\n"  // TODO add comments
-      "public function __construct($in = NULL, &$limit = PHP_INT_MAX) {\n"
+      "public function __construct($in = null, &$limit = PHP_INT_MAX) {\n"
       "  parent::__construct($in, $limit);\n"
       "}\n");
 

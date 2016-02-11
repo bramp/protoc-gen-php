@@ -60,9 +60,9 @@ abstract class ProtobufEnum {
 abstract class ProtobufMessage {
 	private $_unknown;
 
-	function __construct($fp = NULL, &$limit = PHP_INT_MAX) {
+	function __construct($fp = null, &$limit = PHP_INT_MAX) {
 		// Zero arguments, so construct a empty one
-		if($fp === NULL) {
+		if($fp === null) {
 			return;
 		}
 
