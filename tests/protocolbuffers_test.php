@@ -62,22 +62,32 @@ class SignedTest extends PHPUnit_Framework_TestCase {
 class VarintProtobufTest extends ProtobufTestCase {
 
 	var $tests = array(
-		//−9223372036854775808 => "\x80\x80\x80\x80\x80\x80\x80\x80\x80\x01" // -2^63
-		//-2147483648 => "\x80\x80\x80\x80\xf8\xff\xff\xff\xff\x01", // -2^31
-		//-16         => "\xf0\xff\xff\xff\xff\xff\xff\xff\xff\x01",
-		//-8          => "\xf8\xff\xff\xff\xff\xff\xff\xff\xff\x01",
-		//-2          => "\xfe\xff\xff\xff\xff\xff\xff\xff\xff\x01",
-		//-1          => "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01",
-		0           => "\x00",
-		1           => "\x01",
-		2           => "\x02",
-		127         => "\x7F",
-		128         => "\x80\x01",
-		300         => "\xAC\x02",
-		1454260703  => "\xdf\x83\xb9\xb5\x05", // Previously reported broken: https://github.com/bramp/protoc-gen-php/pull/3
-		
+		/*
+		-9223372036854775808 => "\x80\x80\x80\x80\x80\x80\x80\x80\x80\x01", // -2^63
+		-9223372036854775800 => "\x88\x80\x80\x80\x80\x80\x80\x80\x80\x01",
+
+		-72057594037927935   => "\x81\x80\x80\x80\x80\x80\x80\x80\xff\x01", // -2^56 - 1
+		-72057594037927936   => "\x80\x80\x80\x80\x80\x80\x80\x80\xff\x01", // -2^56
+		-72057594037927937   => "\xff\xff\xff\xff\xff\xff\xff\xff\xfe\x01", // -2^56 + 1
+
+		-2147483648          => "\x80\x80\x80\x80\xf8\xff\xff\xff\xff\x01", // -2^31
+		-255                 => "\x81\xfe\xff\xff\xff\xff\xff\xff\xff\x01",
+		-16                  => "\xf0\xff\xff\xff\xff\xff\xff\xff\xff\x01",
+		-8                   => "\xf8\xff\xff\xff\xff\xff\xff\xff\xff\x01",
+		-2                   => "\xfe\xff\xff\xff\xff\xff\xff\xff\xff\x01",
+		-1                   => "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01",
+		*/
+		0                    => "\x00",
+		1                    => "\x01",
+		2                    => "\x02",
+		127                  => "\x7F",
+		128                  => "\x80\x01",
+		255                  => "\xff\x01",
+		300                  => "\xac\x02",
+		1454260703           => "\xdf\x83\xb9\xb5\x05", // Previously reported broken: https://github.com/bramp/protoc-gen-php/pull/3
+
 		// Below should work on 32bit PHP:
-		2147483647  => "\xff\xff\xff\xff\x07", // 2^31-1
+		2147483647             => "\xff\xff\xff\xff\x07", // 2^31-1
 
 		// Below should work on 64bit PHP:
 		2147483648             => "\x80\x80\x80\x80\x08", // 2^31
@@ -96,15 +106,16 @@ class VarintProtobufTest extends ProtobufTestCase {
 
 	function testReadVarint() {
 		foreach ($this->tests as $i => $enc) {
-			if ($i < 0) // Skipped the signed tests
-				continue;
-
 			if (is_string($i))
 				$i = (float)$i;
 
 			$this->reset($enc);
 
-			$a = Protobuf::read_varint($this->fp);
+			if ($i >= 0) {
+				$a = Protobuf::read_varint($this->fp);
+			} else {
+				$a = Protobuf::read_signed_varint($this->fp);
+			}
 			$this->assertSame($i, $a, "Failed to decode varint($i)");
 		}
 	}

@@ -307,9 +307,28 @@ abstract class Protobuf {
 	}
 
 	public static function read_signed_varint($fp, &$limit = PHP_INT_MAX) {
-		$value = self::read_varint($fp, $limit);
-		if ($value > self::MAX_INT32) {
-			return self::signed_extension($value);;
+		$value = self::read_varint_bytes($fp, $limit);
+		$len = strlen($value);
+		if ($len === self::MAX_VARINT_LEN) {
+			// Negative number
+			// Because PHP only has signed types, there is no native way to do
+			// signed extension. To help maintain a accuracy we do it manually
+			// over the bytes of the varint, by flipping the bits and adding one.
+
+			// All but the last bit should be disacard (as it would be above 64bits)
+			$value[$len - 1] = chr(ord($value[$len - 1]) & 0x01);
+			$lastZero = $len - 1;
+			for ($i = $len - 2; $i >= 0; $i--) {
+				$value[$i] = chr(~(ord($value[$i]) & 0x7F));
+				if ($value[$i] === "\x80" && $lastZero === $i + 1) {
+					$lastZero = $i + 1;
+				}
+			}
+
+			$value = substr($value, 0, $lastZero);
+			return -self::decode_varint($value) - 1;
+		} else {
+			return self::decode_varint($value);
 		}
 	}
 
