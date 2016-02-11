@@ -36,7 +36,7 @@ function checkArgument($exp, $message) {
 }
 
 // If you don't care about large numbers, this line can be removed
-assert(PHP_INT_SIZE == 8, "For now we only support PHP on 64bit platforms");
+assert(PHP_INT_SIZE === 8, 'For now we only support PHP on 64bit platforms');
 
 
 if (!function_exists('intdiv')) {
@@ -159,12 +159,15 @@ abstract class Protobuf {
 	const MIN_UINT64 = 0;
 	const MAX_UINT64 = 18446744073709551616;
 
+	const MAX_VARINT_LEN = 10;
+	const MAX_PHP_INT_VARINT_LEN = 9; // The length of the longest varint that represents a valid PHP int
+
 	/**
 	 * Returns a string representing this wiretype
 	 * // TODO Rename to something enum related
 	 */
 	public static function get_wiretype($wire_type) {
-		checkArgument(is_int($wire_type), "wire_type must be a integer");
+		checkArgument(is_int($wire_type), 'wire_type must be a integer');
 
 		switch ($wire_type) {
 			case 0: return '(0) varint';
@@ -183,10 +186,10 @@ abstract class Protobuf {
 	 */
 	public static function size_varint($value) {
 		// TODO Assert 64bit doubles
-		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
+		checkArgument(is_int($value) || is_float($value), 'value must be a integer or float');
 
 		// TODO Rearrange to make a binary search
-		if ($value < 0) return 10; // Negitive numbers are signed extended and always take 10 bytes
+		if ($value < 0) return self::MAX_VARINT_LEN; // Negitive numbers are signed extended and always take 10 bytes
 		if ($value < 0x80) return 1; // 2^7
 		if ($value < 0x4000) return 2; // 2^14
 		if ($value < 0x200000) return 3; // 2^21
@@ -200,11 +203,11 @@ abstract class Protobuf {
 			// A PHP int can't be compared to 2^63, so compare to 2^63-1
 			if ($value <= 0x7FFFFFFFFFFFFFFF) return 9;
 		} else {
-			// However, a float can't represent 2^63-1, so in that case compare to 2^32
+			// However, a float can't exactly represent 2^63-1, so in that case compare to 2^63 (which it can represent)
 			if ($value < 0x8000000000000000) return 9;
 		}
 
-		return 10;
+		return self::MAX_VARINT_LEN;
 	}
 
 	/**
@@ -213,11 +216,11 @@ abstract class Protobuf {
 	 * @returns the decoded int
 	 */
 	public static function decode_varint($encoded) {
-		checkArgument(is_string($encoded), "encoded value must be a string of bytes");
-		checkArgument($encoded !== '', "encoded value contains no bytes");
+		checkArgument(is_string($encoded), 'encoded value must be a string of bytes');
+		checkArgument($encoded !== '', 'encoded value contains no bytes');
 
 		$len = strlen($encoded);
-		if ($len < 10) {
+		if ($len <= self::MAX_PHP_INT_VARINT_LEN) { // TODO lower this on PHP32.
 			return self::decode_varint_int($encoded, $len);
 		} else {
 			return self::decode_varint_float($encoded, $len);
@@ -236,6 +239,7 @@ abstract class Protobuf {
 	}
 
 	protected static function decode_varint_float($encoded, $len) {
+		// Slower implementation that uses math instead of bit operators (as they don't work on floats)
 		$result = 0.0;
 		$shift = 0;
 		for ($i = 0; $i < $len; $i++) {
@@ -247,12 +251,12 @@ abstract class Protobuf {
 	}
 
 	public static function read_bytes($fp, $len, &$limit = PHP_INT_MAX) {
-		checkArgument(get_resource_type($fp) === 'stream', "fp must be a file resource");
+		checkArgument(get_resource_type($fp) === 'stream', 'fp must be a file resource');
 		checkArgument(is_integer($len) && $len >= 0, 'len must be a postitive integer');
 		checkArgument(is_integer($limit) && $limit >= 0, 'limit must be a postitive integer');
 
 		if ($limit < $len) {
-			throw new Exception("read_bytes(): Unexpected end of stream");
+			throw new Exception('read_bytes(): Unexpected end of stream');
 		}
 
 		$bytes = fread($fp, $len);
@@ -265,7 +269,7 @@ abstract class Protobuf {
 		}
 
 		if (strlen($bytes) !== $len) {
-			throw new Exception("read_bytes(): Unexpected end of stream");
+			throw new Exception('read_bytes(): Unexpected end of stream');
 		}
 
 		$limit -= $len;
@@ -291,7 +295,7 @@ abstract class Protobuf {
 
 	/**
 	 * Tries to read a varint from $fp.
-	 * @returns the decoded varint from the stream, or false if the stream has reached eof.
+	 * @returns the decoded varint in the range [0,2^64-1] from the stream, or false if the stream has reached eof.
 	 * @throws exception if stream error occurs
 	 */
 	public static function read_varint($fp, &$limit = PHP_INT_MAX) {
@@ -368,7 +372,7 @@ abstract class Protobuf {
 			case 2: // length delimited
 				$len = self::read_varint($fp, $limit);
 				if ($len <= 0) {
-					throw new Exception('read_field('. self::get_wiretype($wire_type) . "): Invalid length: $len it must be >= 0");
+					throw new Exception('read_field('. self::get_wiretype($wire_type) . '): Invalid length: $len it must be >= 0');
 				}
 				return self::read_bytes($fp, $len, $limit);
 
@@ -385,7 +389,8 @@ abstract class Protobuf {
 	}
 
 	private static function encode_varint_slide($value) {
-		checkArgument(is_int($value), "value must be a integer");
+		checkArgument(is_int($value), 'value must be a integer');
+		checkArgument($value >= 0, 'value must be positive');
 
 		// Code adapted from CodedOutputStream::WriteVarint64ToArrayInline in
 		// coded_stream.cc original protobuf source
@@ -434,7 +439,7 @@ abstract class Protobuf {
 			}
 		}
 
-		assert(false, "reached a line we should never get to");
+		assert(false, 'reached a line we should never get to');
 
 		// Slide
 		size10: $target[9] = chr(($part2 >>  7) | 0x80);
@@ -456,8 +461,15 @@ abstract class Protobuf {
 		return $target;
 	}
 
+	/**
+	 * Varint encodes a integer, using a bitwise method.
+	 * 
+	 * @param int|float $value The number to encode
+	 * @return string the bytes of the encoded value
+	 */
 	protected static function encode_varint_int($value) {
-		checkArgument(is_int($value), "value must be a integer");
+		checkArgument(is_int($value), 'value must be a integer');
+		checkArgument($value >= 0, 'value must be positive');
 
 		$buf = '';
 		while ($value > 0x7F) {
@@ -467,35 +479,52 @@ abstract class Protobuf {
 		return $buf . chr($value & 0x7F);
 	}
 
+	/**
+	 * Varint encodes a float, using a arithmetic method.
+	 * 
+	 * @param int|float $value The number to encode
+	 * @return string the bytes of the encoded value
+	 */
 	protected static function encode_varint_float($value) {
-		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
+		checkArgument(is_int($value) || is_float($value), 'value must be a integer or float');
+		checkArgument($value >= 0 && $value <= MAX_UINT64, 'value must be in the range [0, 2^64-1]');
 
 		$buf = '';
-		while ($value > 127) {
+		while ($value > 0x7F) {
 			$buf .= chr(($value & 0x7F) | 0x80);
-			$value = intdiv($value, 128);
+			$value = intdiv($value, 128); // Use a integer divide instead of bitshift
 		}
 		return $buf . chr($value & 0x7F);
 	}
 
 	/**
-	 * Encodes a int
-	 * @param $value The int to encode
-	 * @returns the bytes of the encoded int
+	 * Varint encodes a number.
+	 * 
+	 * Depending on the type of value, either the the bitwise or
+	 * arithmetic method is used. Typically bitwise is faster, but
+	 * only works with ints, thus to encode floats a arithmetic method
+	 * is used instead.
+	 * 
+	 * @param int|float $value The number to encode
+	 * @return string the bytes of the encoded value
 	 */
 	public static function encode_varint($value) {
-		checkArgument(is_int($value) || is_float($value), "value must be a integer or float");
-		checkArgument($value >= 0, 'value must be a positive integer');
 
-		return self::encode_varint_float($value);
-	}
+		if ($value < 0) {
+			$value = -$value + 1;
+		}
 
-	public static function signed_extension($value) { // TODO This it the wrong name
-		return ~$value + 1;
+		if (is_int($value)) {
+			return self::encode_varint_float($value);
+		} elseif (is_float($value)) {
+			return self::encode_varint_float($value);
+		} else {
+			throw new InvalidArgumentException('value must be a integer or float');
+		}
 	}
 
 	/**
-	 * Writes a varint to $fp
+	 * Writes a unsigned varint to $fp
 	 * returns the number of bytes written
 	 * @param $fp
 	 * @param $value The int to encode and write

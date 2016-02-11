@@ -122,11 +122,12 @@ class VarintProtobufTest extends ProtobufTestCase {
 	function testWriteVarint() {
 		foreach ($this->tests as $i => $enc) {
 			if (is_string($i)) {
-				// Skip doubles without exact reprentation
+				// Skip doubles without exact reprentation, they will make the test
+				// fail, and there is nothing we can do about it.
 				if (number_format((float)$i, 0, '.', '') !== $i) {
-					//echo "skip want:$i got:" . number_format((float)$i, 0, '.', '')  . "\n";
 					continue;
 				}
+
 				$i = (float)$i;
 			}
 

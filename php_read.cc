@@ -271,7 +271,6 @@ void PHPFileGenerator::PrintRead(const Descriptor& message,
   }
 
   if (options_.handle_unknown()) {
-    // TODO This fails to parse packed fields
     printer_.Print(
         "default:\n"
         "  $field_idx = $field . '-' . Protobuf::get_wiretype($wire);\n"
