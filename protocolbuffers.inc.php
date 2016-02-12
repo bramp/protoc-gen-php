@@ -227,6 +227,35 @@ abstract class Protobuf {
 		}
 	}
 
+	public static function decode_signed_varint($encoded) {
+		checkArgument(is_string($encoded), 'encoded value must be a string of bytes');
+		checkArgument($encoded !== '', 'encoded value contains no bytes');
+
+		$len = strlen($encoded);
+		if ($len === self::MAX_VARINT_LEN) {
+			// Negative number
+			// Because PHP only has signed types, there is no native way to do
+			// signed extension. To help maintain a accuracy we do it manually
+			// over the bytes of the varint, by flipping the bits and adding one.
+
+			// All but the last bit should be disacard (as it would be above 64bits)
+			$encoded[$len - 1] = chr(ord($encoded[$len - 1]) & 0x01);
+			$lastZero = $len - 1;
+			for ($i = $len - 2; $i >= 0; $i--) {
+				$encoded[$i] = chr(~(ord($encoded[$i]) & 0x7F));
+				if ($encoded[$i] === "\x80" && $lastZero === $i + 1) {
+					$lastZero = $i + 1;
+				}
+			}
+
+			$encoded = substr($encoded, 0, $lastZero);
+			return -self::decode_varint($encoded) - 1;
+		} else {
+			return self::decode_varint($encoded);
+		}
+	}
+
+
 	protected static function decode_varint_int($encoded, $len) {
 		$result = 0;
 		$shift = 0;
@@ -277,7 +306,13 @@ abstract class Protobuf {
 	}
 
 	/**
-	 * Reads a varint but does not decode
+	 * Reads a varint but does not decode.
+	 * 
+	 * @param  resource $fp Resource stream to read from
+	 * @param  int $limit Max bytes to read, passed by reference and will be decremented by the number of read bytes
+	 * 
+	 * @return string|bool Returns the read varint bytes, or false on EOF.
+	 * @throws exception if stream error occurs
 	 */
 	public static function read_varint_bytes($fp, &$limit = PHP_INT_MAX) {
 		$value = '';
@@ -308,28 +343,10 @@ abstract class Protobuf {
 
 	public static function read_signed_varint($fp, &$limit = PHP_INT_MAX) {
 		$value = self::read_varint_bytes($fp, $limit);
-		$len = strlen($value);
-		if ($len === self::MAX_VARINT_LEN) {
-			// Negative number
-			// Because PHP only has signed types, there is no native way to do
-			// signed extension. To help maintain a accuracy we do it manually
-			// over the bytes of the varint, by flipping the bits and adding one.
-
-			// All but the last bit should be disacard (as it would be above 64bits)
-			$value[$len - 1] = chr(ord($value[$len - 1]) & 0x01);
-			$lastZero = $len - 1;
-			for ($i = $len - 2; $i >= 0; $i--) {
-				$value[$i] = chr(~(ord($value[$i]) & 0x7F));
-				if ($value[$i] === "\x80" && $lastZero === $i + 1) {
-					$lastZero = $i + 1;
-				}
-			}
-
-			$value = substr($value, 0, $lastZero);
-			return -self::decode_varint($value) - 1;
-		} else {
-			return self::decode_varint($value);
+		if ($value === false) {
+			return false;
 		}
+		return self::decode_signed_varint($value);
 	}
 
 	/**
@@ -407,7 +424,13 @@ abstract class Protobuf {
 		}
 	}
 
-	private static function encode_varint_slide($value) {
+	/**
+	 * Varint encodes a integer, using a loop-less bitwise method.
+	 * 
+	 * @param int|float $value The number to encode
+	 * @return string the bytes of the encoded value
+	 */
+	public static function encode_varint_slide($value) {
 		checkArgument(is_int($value), 'value must be a integer');
 		checkArgument($value >= 0, 'value must be positive');
 
@@ -486,7 +509,7 @@ abstract class Protobuf {
 	 * @param int|float $value The number to encode
 	 * @return string the bytes of the encoded value
 	 */
-	protected static function encode_varint_int($value) {
+	public static function encode_varint_int($value) {
 		checkArgument(is_int($value), 'value must be a integer');
 		checkArgument($value >= 0, 'value must be positive');
 
@@ -504,9 +527,9 @@ abstract class Protobuf {
 	 * @param int|float $value The number to encode
 	 * @return string the bytes of the encoded value
 	 */
-	protected static function encode_varint_float($value) {
+	public static function encode_varint_float($value) {
 		checkArgument(is_int($value) || is_float($value), 'value must be a integer or float');
-		checkArgument($value >= 0 && $value <= MAX_UINT64, 'value must be in the range [0, 2^64-1]');
+		checkArgument($value >= 0 && $value <= self::MAX_UINT64, 'value must be in the range [0, 2^64-1]');
 
 		$buf = '';
 		while ($value > 0x7F) {
