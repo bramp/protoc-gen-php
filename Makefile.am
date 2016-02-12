@@ -20,6 +20,9 @@ noinst_SCRIPTS = protocolbuffers.inc.php
 test:
 	phpunit tests/*_test.php
 
+bench:
+	php tests/varints_benchmark.php
+
 # Useful for testing
 MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
 GENTESTS = $(MYTESTS:.proto=.proto.php)
