@@ -28,3 +28,6 @@ compile
 
 .deps/
 test-driver
+
+# PHP Related
+tests/vendor/

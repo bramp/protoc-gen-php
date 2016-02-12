@@ -1,68 +1,12 @@
 <?php
 error_reporting(E_ALL);
 
-require('phpunit_utils.php');
-
+require('phpunit_base.php');
 require('protocolbuffers.inc.php');
-
-function stringToStream($str) {
-	$fp = fopen('php://temp', 'w+b');
-	fwrite($fp, $str);
-	rewind($fp);
-	return $fp;
-}
-
-
-abstract class ProtobufTestCase extends PHPUnit_Framework_TestCase {
-	var $fp;
-
-	public function setUp() {
-		$this->fp = fopen('php://memory', 'r+b');
-		$this->assertTrue($this->fp !== false, 'Unable to open stream');
-    }
-
-	public function tearDown() {
-		fclose($this->fp);
-    }
-
-
-    // Reset the resource to these bytes
-    protected function reset($bytes = '') {
-		$this->assertTrue(ftruncate($this->fp, 0));
-		$this->assertEquals(strlen($bytes), fwrite($this->fp, $bytes));
-		$this->assertTrue(rewind($this->fp));
-    }
-
-    // Gets the bytes written to the buffer
-    protected function get() {
-    	$this->assertTrue(rewind($this->fp));
-    	return stream_get_contents($this->fp);
-    }
-}
-
-/*
-class SignedTest extends PHPUnit_Framework_TestCase {
-	var $tests = array(
-		0 => 0,
-		1 => 1,
-		2147483647 => 2147483647,
-		2147483648 => -2147483648,
-		4294967296 => -1,
-	);
-
-	function testSignedExtension() {
-		foreach ($this->tests as $a => $b) {
-			echo $a . " " . $b . " ~ " . Protobuf::signed_extension($b) . "\n";
-			$this->assertEquals($a, Protobuf::signed_extension($b), "Failed signed_extension");
-		}
-	}
-}
-*/
 
 class VarintProtobufTest extends ProtobufTestCase {
 
 	var $tests = array(
-		/*
 		-9223372036854775808 => "\x80\x80\x80\x80\x80\x80\x80\x80\x80\x01", // -2^63
 		-9223372036854775800 => "\x88\x80\x80\x80\x80\x80\x80\x80\x80\x01",
 
@@ -76,7 +20,6 @@ class VarintProtobufTest extends ProtobufTestCase {
 		-8                   => "\xf8\xff\xff\xff\xff\xff\xff\xff\xff\x01",
 		-2                   => "\xfe\xff\xff\xff\xff\xff\xff\xff\xff\x01",
 		-1                   => "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01",
-		*/
 		0                    => "\x00",
 		1                    => "\x01",
 		2                    => "\x02",
@@ -104,6 +47,7 @@ class VarintProtobufTest extends ProtobufTestCase {
 		"18446744073709551615" => "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01", // 2^64 - 1
 	);
 
+
 	function testReadVarint() {
 		foreach ($this->tests as $i => $enc) {
 			if (is_string($i))
@@ -116,7 +60,7 @@ class VarintProtobufTest extends ProtobufTestCase {
 			} else {
 				$a = Protobuf::read_signed_varint($this->fp);
 			}
-			$this->assertSame($i, $a, "Failed to decode varint($i)");
+			$this->assertSame($i, $a, "Failed to read_varint($i)");
 		}
 	}
 
@@ -133,9 +77,9 @@ class VarintProtobufTest extends ProtobufTestCase {
 	function testWriteVarint() {
 		foreach ($this->tests as $i => $enc) {
 			if (is_string($i)) {
-				// Skip doubles without exact reprentation, they will make the test
+				// Skip floats without exact reprentation, they will make the test
 				// fail, and there is nothing we can do about it.
-				if (number_format((float)$i, 0, '.', '') !== $i) {
+				if (!hasExactRepresentation($i)) {
 					continue;
 				}
 
@@ -145,103 +89,48 @@ class VarintProtobufTest extends ProtobufTestCase {
 			$this->reset();
 
 			$len = Protobuf::write_varint($this->fp, $i);
-			assertBinaryEqual($enc, $this->get(), "Failed to encode varint($i)");
+			$this->assertBinaryEqual($enc, $this->get(), "Failed to write_varint($i)");
 		}
 	}
-/*
 
-	function testSignedReadVarint() {
+	function testEncodeVarintInt() {
 		foreach ($this->tests as $i => $enc) {
-			if ($i >= 0) // Skipped the signed tests
+			if (!is_int($i) || $i < 0) {
 				continue;
+			}
 
-			$this->reset($enc);
-
-			$a = Protobuf::read_varint($this->fp);
-			$this->assertSame($i, $a, "Failed to decode varint($i) got $a");
+			// Only test positive ints
+			$result = Protobuf::encode_varint_int($i);
+			$this->assertBinaryEqual($enc, $result, "Failed to encode_varint_int($i)");
 		}
 	}
 
+	function testEncodeVarintIntSlide() {
+		foreach ($this->tests as $i => $enc) {
+			if (!is_int($i) || $i < 0) {
+				continue;
+			}
 
-
-
-
-*/
-/*
-	function testWriteVarint() {
-
-		$fp = $this->fp;
-
-		foreach ($tests as $i => $enc) {
-			$this->assertTrue(ftruncate($fp, 0));
-
-			$len = Protobuf::write_varint($fp, $i);
-			$this->assertEquals($len, Protobuf::size_varint($i));
-
-			// Read it back to check it's good
-			$this->assertTrue(rewind($fp));
-			$b = fread($fp, $len);
-			$this->assertEquals($enc, $b, "Failed to encode varint($i)");
-
-			// Now try to decode it.
-			$this->assertTrue(rewind($fp));
-			$a = Protobuf::read_varint($fp, $len);
-			$this->assertEquals($i, $a, "Failed to decode varint($i) got $a");
+			// Only test positive ints
+			$result = Protobuf::encode_varint_slide($i);
+			$this->assertBinaryEqual($enc, $result, "Failed to encode_varint_slide($i)");
 		}
 	}
-	function testSignedVarint() {
 
-		$fp = $this->fp;
+	function testEncodeVarintFloat() {
+		foreach ($this->tests as $i => $enc) {
+			if (!hasExactRepresentation($i) || $i < 0) {
+				continue;
+			}
 
-		foreach ($tests as $i => $enc) {
-			$this->assertTrue(ftruncate($fp, 0));
+			if (is_string($i)) {
+				$i = (float)$i;
+			}
 
-			$len = Protobuf::write_signed_varint($fp, $i);
-			$this->assertEquals($len, Protobuf::size_varint($i));
-
-			// Read it back to check it's good
-			$this->assertTrue(rewind($fp));
-			$b = fread($fp, $len);
-			$this->assertEquals($enc, $b, "Failed to encode varint($i)");
-
-			// Now try to decode it.
-			$this->assertTrue(rewind($fp));
-			$a = Protobuf::read_signed_varint($fp, $len);
-			$this->assertEquals($i, $a, "Failed to decode varint($i) got $a");
+			$result = Protobuf::encode_varint_float($i);
+			$this->assertBinaryEqual($enc, $result, "Failed to encode_varint_float($i)");
 		}
 	}
-*/
-/*
-	// Test reading and writing many varints
-	// TODO Turn this into a benchmark
-	function testManyVarint() {
-		$fp = $this->fp;
-
-		$max = pow(2, 10);
-		for ($i = -$max; $i < $max; $i++) {
-			$this->assertTrue(ftruncate($fp, 0));
-
-			$len = Protobuf::write_varint($fp, $i);
-			$this->assertGreaterThan(0, $len);
-
-			fseek($fp, 0, SEEK_SET);
-			$a = Protobuf::read_varint($fp, $len);
-			$this->assertEquals($i, $a);
-		}
-	}
-*/
-
-/*
-	function testBrokenVarint() {
-		$tests = array("", "\x80", "\x80\x80");
-
-		for ($tests as $test) {
-			$fp = stringToStream($test);
-			Protobuf::read_varint($fp);
-			fclose($fp);
-		}
-	}
-*/
 }
 
 

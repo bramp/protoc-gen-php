@@ -1,0 +1,6 @@
+{
+	"require-dev": {
+        "phpunit/phpunit": "5.0.*",
+        "devster/ubench": "1.2.0"
+    }
+}
