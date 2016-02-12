@@ -3,8 +3,8 @@
 
 AC_PREREQ([2.69])
 AC_INIT([protoc-gen-php], [1.0], [github@bramp.net])
-AC_CONFIG_SRCDIR([protoc-gen-php.cc])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_SRCDIR([src/protoc-gen-php.cc])
+AC_CONFIG_HEADERS([src/config.h])
 AM_INIT_AUTOMAKE
 
 # Checks for programs.
@@ -34,4 +34,4 @@ AC_TYPE_SIZE_T
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([localeconv memmove setlocale strchr strpbrk strtol strtoul strtoull])
 
-AC_OUTPUT(Makefile reference_app/Makefile)
+AC_OUTPUT(Makefile src/Makefile reference_app/Makefile)
