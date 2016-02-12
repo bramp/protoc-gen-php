@@ -434,7 +434,7 @@ abstract class Protobuf {
 		// Code adapted from CodedOutputStream::WriteVarint64ToArrayInline in
 		// coded_stream.cc original protobuf source
 		// TODO Change to be more PHP-like.
-		$target = array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+		$target = "\0\0\0\0\0\0\0\0\0\0";
 
   		$part0 = $value & 0xffffffff;
 		$part1 = ($value >> 28) & 0xffffffff;
@@ -494,10 +494,7 @@ abstract class Protobuf {
 
 		$target[$size-1] = chr(ord($target[$size-1]) & 0x7F);
 
-		$target = array_slice($target, 0, $size);
-		$target = implode($target);
-
-		return $target;
+		return substr($target, 0, $size);
 	}
 
 	/**
