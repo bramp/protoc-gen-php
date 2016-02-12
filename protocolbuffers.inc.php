@@ -217,7 +217,6 @@ abstract class Protobuf {
 	 */
 	public static function decode_varint($encoded) {
 		checkArgument(is_string($encoded), 'encoded value must be a string of bytes');
-		checkArgument($encoded !== '', 'encoded value contains no bytes');
 
 		$len = strlen($encoded);
 		if ($len <= self::MAX_PHP_INT_VARINT_LEN) { // TODO lower this on PHP32.
@@ -238,17 +237,15 @@ abstract class Protobuf {
 			// signed extension. To help maintain a accuracy we do it manually
 			// over the bytes of the varint, by flipping the bits and adding one.
 
-			// All but the last bit should be disacard (as it would be above 64bits)
-			$encoded[$len - 1] = chr(ord($encoded[$len - 1]) & 0x01);
-			$lastZero = $len - 1;
-			for ($i = $len - 2; $i >= 0; $i--) {
+			$len--;
+			for ($i = 0; $i < $len; $i++) {
 				$encoded[$i] = chr(~(ord($encoded[$i]) & 0x7F));
-				if ($encoded[$i] === "\x80" && $lastZero === $i + 1) {
-					$lastZero = $i + 1;
-				}
 			}
 
-			$encoded = substr($encoded, 0, $lastZero);
+			// Drop the last digit as it's above 64bit and not used
+			$encoded = substr($encoded, 0, $len);
+			$encoded = rtrim($encoded, "\x80"); // TODO change this to rtrim(\xff) and move above the loop
+
 			return -self::decode_varint($encoded) - 1;
 		} else {
 			return self::decode_varint($encoded);
@@ -553,16 +550,31 @@ abstract class Protobuf {
 	public static function encode_varint($value) {
 
 		if ($value < 0) {
-			$value = -$value + 1;
+			$value = -($value + 1);
+			$negative = true;
+		} else {
+			$negative = false;
 		}
 
 		if (is_int($value)) {
-			return self::encode_varint_float($value);
+			$encoded = self::encode_varint_int($value);
 		} elseif (is_float($value)) {
-			return self::encode_varint_float($value);
+			$encoded = self::encode_varint_float($value);
 		} else {
 			throw new InvalidArgumentException('value must be a integer or float');
 		}
+
+		if ($negative) {
+			$len = strlen($encoded);
+			for ($i = $len - 1; $i >= 0; $i--) {
+				$encoded[$i] = chr(~(ord($encoded[$i])) | 0x80);
+			}
+
+			// Now sign extend
+			$encoded = str_pad($encoded, 9, "\xff", STR_PAD_RIGHT) . "\x01";
+		}
+
+		return $encoded;
 	}
 
 	/**
