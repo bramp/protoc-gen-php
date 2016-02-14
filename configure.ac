@@ -15,6 +15,16 @@ AC_CHECK_PROG([PROTOC], [protoc], [protoc])
 AS_IF([test "x${PROTOC}" == "x"],
     [AC_MSG_ERROR([Protobuf compiler "protoc" not found.])])
 
+# TODO Check PHP version
+AC_CHECK_PROG([PHP], [php], [php])
+AS_IF([test "x${PHP}" == "x"],
+    [AC_MSG_ERROR([PHP not found.])])
+
+# The following is needed for dev/testing
+AC_CHECK_PROG([COMPOSER], [composer], [composer])
+AS_IF([test "x${COMPOSER}" == "x"],
+    [AC_MSG_WARN([composer not found. Tests can't run without it])])
+
 # Checks for libraries.
 PKG_CHECK_MODULES(PROTOBUF, protobuf >= 2.6.1)
 #PKG_CHECK_MODULES(PROTOBUF, protobuf >= 3)
@@ -35,4 +45,4 @@ AC_TYPE_SIZE_T
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([localeconv memmove setlocale strchr strpbrk strtol strtoul strtoull])
 
-AC_OUTPUT(Makefile src/Makefile reference_app/Makefile)
+AC_OUTPUT(Makefile src/Makefile tests/Makefile reference_app/Makefile)

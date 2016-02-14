@@ -1,5 +1,7 @@
+.PHONY = test bench
+
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = src reference_app
+SUBDIRS = src tests reference_app
 
 EXTRA_DIST = autogen.sh
 
@@ -17,17 +19,14 @@ noinst_SCRIPTS = protocolbuffers.inc.php
 # Renable this, but `make check` doesn't play nice with phpunit
 #TESTS = test
 
-test:
-	phpunit tests/*_test.php
-
-bench:
-	php tests/varints_benchmark.php
+test bench:
+	$(MAKE) -C tests $@
 
 # Useful for testing
 MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
 GENTESTS = $(MYTESTS:.proto=.proto.php)
 %.proto.php : %.proto protoc-gen-php
-	protoc --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
+	$(PROTOC) --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
 
 mytest: $(GENTESTS)
 	php --syntax-check protocolbuffers.inc.php; \

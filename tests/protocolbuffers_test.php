@@ -3,7 +3,7 @@ error_reporting(E_ALL);
 
 require('phpunit_base.php');
 
-require('protocolbuffers.inc.php');
+require('../protocolbuffers.inc.php');
 
 class VarintProtobufTest extends ProtobufTestCase {
 

@@ -5,7 +5,7 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-require 'protocolbuffers.inc.php';
+require '../protocolbuffers.inc.php';
 
 define("TRIALS", 3);
 define("LOOPS", 100000);
