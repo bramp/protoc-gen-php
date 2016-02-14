@@ -44,7 +44,7 @@ void PHPFileGenerator::PrintFields(const Descriptor& message) {
     const FieldDescriptor& field(Deref(message.field(i)));
 
     // Skip over fields in oneof
-    if (field.containing_oneof() != nullptr) {
+    if (field.containing_oneof() != NULL) {
       assert(!field.is_repeated());  // Proto spec doesn't allow repeated oneof
                                      // fields. We assume this elsewhere, so
                                      // lets check.

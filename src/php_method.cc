@@ -55,7 +55,7 @@ void PHPFileGenerator::PrintSetterGetterMethods(const Descriptor& message) {
     // TODO Change the set code to validate input depending on the variable type
     // TODO Add comments to the methods
     // TODO Add @Deprecated tag
-    if (field.containing_oneof() != nullptr) {
+    if (field.containing_oneof() != NULL) {
       // A oneof field
       printer_.Print(variables,
         "public function clear`capitalized_name`() { if ($this->`oneof_case` === self::`oneof`) clear`oneof_capitalized_name`(); }\n"

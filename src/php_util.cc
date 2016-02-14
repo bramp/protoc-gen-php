@@ -1,9 +1,8 @@
 #include "php_util.h"
 
-#include "util.h"
 #include "strutil.h"
 
-#include <cstdint>
+#include <stdint.h>
 #include <map>
 #include <string>
 #include <algorithm>
@@ -42,7 +41,7 @@ string UnderscoresToCapitalizedCamelCase(const string &s) {
  * @return
  */
 string ArrayToPHPString(const uint8 *a, size_t len) {
-  assert(a != nullptr);
+  assert(a != NULL);
   assert(len > 0);
 
   const int dest_length = len * 4 + 1;  // Maximum possible expansion

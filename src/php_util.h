@@ -18,7 +18,7 @@ using google::protobuf::internal::WireFormatLite;  // TODO Should I be using
 
 template <class T>
 T &Deref(T *t) {
-  assert(t != nullptr);
+  assert(t != NULL);
   return *t;
 }
 

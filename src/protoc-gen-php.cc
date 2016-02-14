@@ -68,8 +68,8 @@ bool PHPCodeGenerator::Generate(const FileDescriptor* file,
                                 const string& parameter,
                                 GeneratorContext* context,
                                 string* error) const {
-  assert(file != nullptr);
-  assert(context != nullptr);
+  assert(file != NULL);
+  assert(context != NULL);
 
   string php_filename = FileDescriptorToPath(*file);
   cerr << "Generating " << php_filename << endl;

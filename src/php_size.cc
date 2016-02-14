@@ -82,7 +82,7 @@ void PHPFileGenerator::PrintSize(const Descriptor& message) {
     } else {
       variables["var"] = "$this->" + VariableName(field.name());
 
-      if (field.containing_oneof() != nullptr) {
+      if (field.containing_oneof() != NULL) {
         const OneofDescriptor& oneof(Deref(field.containing_oneof()));
 
         variables["var"] = "$this->" + VariableName(oneof.name());

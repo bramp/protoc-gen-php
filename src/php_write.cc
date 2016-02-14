@@ -126,7 +126,7 @@ void PHPFileGenerator::PrintWrite(const Descriptor& message) {
       // variables["var"] = VariableName(field.name());
       variables["var"] = "$this->" + VariableName(field.name());
 
-      if (field.containing_oneof() != nullptr) {
+      if (field.containing_oneof() != NULL) {
         const OneofDescriptor& oneof(Deref(field.containing_oneof()));
 
         variables["var"] = "$this->" + VariableName(oneof.name());
