@@ -21,7 +21,6 @@ using std::map;
 using std::string;
 
 using namespace google::protobuf;
-using namespace google::protobuf::compiler;
 using namespace google::protobuf::internal;
 
 /**

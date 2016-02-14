@@ -109,7 +109,6 @@ void PHPFileGenerator::TypeHintingFieldVariables(const FieldDescriptor &field,
     variables["int_return_type"] = ": int";
 
     switch (field.type()) {
-      //      TODO If PHP>7 enums should be type checked as a int
       case FieldDescriptor::TYPE_ENUM:
         variables["type"] = "int ";
         variables["return_type"] = ": int";

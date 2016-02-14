@@ -253,7 +253,7 @@ abstract class Protobuf {
 	}
 
 
-	protected static function decode_varint_int($encoded, $len) {
+	public static function decode_varint_int($encoded, $len) {
 		$result = 0;
 		$shift = 0;
 		for ($i = 0; $i < $len; $i++) {
@@ -264,13 +264,15 @@ abstract class Protobuf {
 		return $result;
 	}
 
-	protected static function decode_varint_float($encoded, $len) {
-		// Slower implementation that uses math instead of bit operators (as they don't work on floats)
+	/**
+	 * Slower implementation that uses math instead of bit operators (as they don't work on floats)
+	 */
+	public static function decode_varint_float($encoded, $len) {
 		$result = 0.0;
-		$shift = 0;
+		$shift = 1.0;
 		for ($i = 0; $i < $len; $i++) {
-			$result += (ord($encoded[$i]) & 0x7F) * pow(2, $shift);
-			$shift += 7;
+			$result += (ord($encoded[$i]) & 0x7F) * $shift;
+			$shift *= 128;
 		}
 
 		return $result;
@@ -454,7 +456,6 @@ abstract class Protobuf {
 
 		// Code adapted from CodedOutputStream::WriteVarint64ToArrayInline in
 		// coded_stream.cc original protobuf source
-		// TODO Change to be more PHP-like.
 		$target = "\0\0\0\0\0\0\0\0\0\0";
 
   		$part0 = $value & 0xffffffff;
@@ -548,7 +549,7 @@ abstract class Protobuf {
 
 		$buf = '';
 		while ($value > 0x7F) {
-			$buf .= chr(($value & 0x7F) | 0x80);
+			$buf .= chr(($value & 0x7F) | 0x80); // TODO Test if mod/+ is faster than and/or
 			$value = intdiv($value, 128); // Use a integer divide instead of bitshift
 		}
 		return $buf . chr($value & 0x7F);
@@ -594,6 +595,7 @@ abstract class Protobuf {
 	 * 
 	 * @param int|float $value The number to encode
 	 * @return string the bytes of the encoded value
+	 * @throws InvalidArgumentException if the $value is not a integer of float
 	 */
 	public static function encode_varint($value) {
 
