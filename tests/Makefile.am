@@ -3,7 +3,7 @@ AUTOMAKE_OPTIONS = foreign
 MAKEFLAGS = --no-builtin-rules
 SUFFIXES:
 
-.PHONY = test bench
+.PHONY = all test bench
 
 PHPUNIT=vendor/bin/phpunit
 

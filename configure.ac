@@ -23,7 +23,7 @@ AS_IF([test "x${PHP}" == "x"],
 # The following is needed for dev/testing
 AC_CHECK_PROG([COMPOSER], [composer], [composer])
 AS_IF([test "x${COMPOSER}" == "x"],
-    [AC_MSG_WARN([composer not found. Tests can't run without it])])
+    [AC_MSG_ERROR([composer not found. https://getcomposer.org])])
 
 # Checks for libraries.
 PKG_CHECK_MODULES(PROTOBUF, protobuf >= 2.6.1)

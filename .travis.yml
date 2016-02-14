@@ -19,12 +19,26 @@ php:
 addons:
   apt:
     packages:
-    - protobuf-compiler
+    # proto3 isn't in packages, so we build it ourselves below
+    # - libprotobuf-dev
+    # - protobuf-compiler
+
+    # TODO If we want to support c++11 uncomment the following
+    # # http://stackoverflow.com/a/30925448/88646
+    # sources:
+    # - ubuntu-toolchain-r-test
+    # packages:
+    # - gcc-4.8
+    # - g++-4.8
+    # - clang
 
 before_install:
+  - source ./install-protobuf.sh
   - composer self-update
 
 install:
+  # TODO If we want to support c++11 uncomment the following
+  # - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
 
 before_script:
   - uname -a
@@ -42,6 +56,7 @@ script:
   - make test
 
 cache:
+  apt: true
   directories:
     - tests/vendor
     - $HOME/.composer/cache

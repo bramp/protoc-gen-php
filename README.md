@@ -51,7 +51,7 @@ This has only been tested on Linux and Mac. You will need the following librarie
 
 ```
 # For Debian based Linux
-sudo apt-get install libprotobuf-dev libprotobuf-lite7 libprotobuf7 libprotoc-dev libprotoc7
+sudo apt-get install libprotobuf-dev protobuf-compiler
 
 # For Mac
 brew install protobuf
