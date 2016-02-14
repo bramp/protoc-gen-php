@@ -1,4 +1,4 @@
-syntax = "proto3";
+syntax = "proto2";
 
 import "google/protobuf/descriptor.proto";
 
@@ -6,13 +6,13 @@ message PHPFileOptions {
 	// Which PHP version are we targetting? e.g
 	// 53 is PHP 5.3
 	// 70 is PHP 7.0
-	int32 target_version = 1;
+	optional int32 target_version = 1;
 
 	// If true, unknown fields are silently skipped,
 	// // TODO proto2 allows unknown, but proto3 drops them. Change this to a Boolean type, so we can have true,false,null
-	bool handle_unknown = 2;
+	optional bool handle_unknown = 2;
 }
 
 extend google.protobuf.FileOptions {
-	PHPFileOptions php = 1004; // TODO use a different tag
+	optional PHPFileOptions php = 1004; // TODO use a different tag
 }
