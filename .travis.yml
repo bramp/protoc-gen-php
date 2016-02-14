@@ -8,6 +8,19 @@ php:
   - '7.0'
   - hhvm
 
+#language: cpp
+#compiler:
+#  - clang
+#  - gcc
+#env:
+#  - CXX=clang
+#  - CXX=gcc
+
+addons:
+  apt:
+    packages:
+    - protobuf-compiler
+
 before_install:
   - composer self-update
 
@@ -15,6 +28,7 @@ install:
 
 before_script:
   - uname -a
+  - cat /etc/lsb-release
   - g++ --version || echo "no g++ found"
   - clang++ --version || echo "no clang++ found"
   - make --version || echo "no make found"
@@ -22,12 +36,9 @@ before_script:
   - autoconf --version || echo "no autoconf found"
   - php --version || echo "no php found"
   - protoc --version || echo "no protoc found"
-  - echo $CXX
-  - echo $CC
 
 script:
-  - ./autogen.sh
-  - ./configure
+  - ./autogen.sh && ./configure
   - make test
 
 cache:
