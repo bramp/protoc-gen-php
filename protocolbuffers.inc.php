@@ -38,13 +38,6 @@ function checkArgument($exp, $message) {
 // If you don't care about large numbers, this line can be removed
 assert(PHP_INT_SIZE === 8, 'For now we only support PHP on 64bit platforms');
 
-
-if (!function_exists('intdiv')) {
-	function intdiv($a, $b){
-	    return ($a - $a % $b) / $b;
-	}
-}
-
 abstract class ProtobufIO {
 	public static function toStream($in, &$limit = PHP_INT_MAX) {
 		// If the input is a string, turn it into a stream and decode it
@@ -550,7 +543,7 @@ abstract class Protobuf {
 		$buf = '';
 		while ($value > 0x7F) {
 			$buf .= chr(($value & 0x7F) | 0x80); // TODO Test if mod/+ is faster than and/or
-			$value = intdiv($value, 128); // Use a integer divide instead of bitshift
+			$value = floor($value / 128.0); // TODO Test if ($a - $a % $b) / $b; is faster
 		}
 		return $buf . chr($value & 0x7F);
 	}
