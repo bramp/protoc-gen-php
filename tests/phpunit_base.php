@@ -1,6 +1,7 @@
 <?php
 
 function stringToStream($str) {
+	// TODO Consider replacing with ProtobufIO::toStream
 	$fp = fopen('php://temp', 'w+b');
 	fwrite($fp, $str);
 	rewind($fp);
