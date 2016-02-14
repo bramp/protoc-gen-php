@@ -2,7 +2,9 @@ PHP Protocol Buffer Generator
 =============================
 
 This is a plugin for Google's Protocol Buffer Generator, protoc. It generates PHP code from a .proto file.
-by Andrew Brampton ([bramp.net](http://bramp.net)) (c) 2010,2013
+by Andrew Brampton ([bramp.net](http://bramp.net)) (c) 2010,2016
+
+[![Minimum PHP Version](https://img.shields.io/badge/php-%3E%3D%205.5-8892BF.svg?style=flat-square)](https://php.net/) [![Build Status](https://img.shields.io/travis/bramp/protoc-gen-php/master.svg?style=flat-square)](https://travis-ci.org/bramp/protoc-gen-php)
 
 Supports:
  * Proto2 and Proto3
