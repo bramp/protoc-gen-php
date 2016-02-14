@@ -276,6 +276,27 @@ abstract class Protobuf {
 		return $result;
 	}
 
+	public static function decode_varint_bc($encoded, $len) {
+		$result = 0;
+		$shift = 1;
+		for ($i = 0; $i < $len; $i++) {
+			$result = bcadd($result, bcmul(ord($encoded[$i]) & 0x7F, $shift));
+			$shift = bcmul($shift, 128);
+		}
+		return $result;
+	}
+
+	public static function decode_varint_gmp($encoded, $len) {
+		$i128 = gmp_init(128);
+		$result = gmp_init(0);
+		$shift = gmp_init(1);
+		for ($i = 0; $i < $len; $i++) {
+			$result = gmp_add($result, gmp_mul(ord($encoded[$i]) & 0x7F, $shift));
+			$shift = gmp_mul($shift, $i128);
+		}
+		return gmp_strval($result);
+	}
+
 	public static function read_bytes($fp, $len, &$limit = PHP_INT_MAX) {
 		checkArgument(get_resource_type($fp) === 'stream', 'fp must be a file resource');
 		checkArgument(is_integer($len) && $len >= 0, 'len must be a postitive integer');
@@ -531,6 +552,36 @@ abstract class Protobuf {
 			$value = intdiv($value, 128); // Use a integer divide instead of bitshift
 		}
 		return $buf . chr($value & 0x7F);
+	}
+
+	public static function encode_varint_bc($value) {
+		checkArgument(is_numeric($value), 'value must be numeric');
+		checkArgument(bccomp($value, 0) >= 0 && bccomp($value, "18446744073709551615") <= 0, 'value must be in the range [0, 2^64-1]');
+
+		$buf = '';
+		while (bccomp($value, 128) >= 0) {
+			$buf .= chr(bcadd(bcmod($value, 128), 128));
+			$value = bcdiv($value, 128, 0);
+		}
+
+		return $buf . chr(bcmod($value, 128));
+	}
+
+	public static function encode_varint_gmp($value) {
+		checkArgument(is_numeric($value), 'value must be numeric');
+
+		$value = gmp_init($value);
+		checkArgument(gmp_cmp($value, 0) >= 0 && gmp_cmp($value, "18446744073709551615") <= 0, 'value must be in the range [0, 2^64-1]');
+
+		$i128 = gmp_init(128);
+
+		$buf = '';
+		while (gmp_cmp($value, $i128) >= 0) {
+			$buf .= chr(gmp_intval(gmp_add(gmp_mod($value, $i128), $i128)));
+			$value = gmp_div($value, $i128, GMP_ROUND_ZERO); // TODO Consider changing to gmp_div_qr so we can avoid a mod
+		}
+
+		return $buf . chr(gmp_intval(gmp_mod($value, $i128)));
 	}
 
 	/**
