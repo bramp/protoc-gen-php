@@ -12,9 +12,22 @@ before_install:
   - composer self-update
 
 install:
-  - (cd tests && composer install)
+
+before_script:
+  - uname -a
+  - g++ --version || echo "no g++ found"
+  - clang++ --version || echo "no clang++ found"
+  - make --version || echo "no make found"
+  - automake --version || echo "no automake found"
+  - autoconf --version || echo "no autoconf found"
+  - php --version || echo "no php found"
+  - protoc --version || echo "no protoc found"
+  - echo $CXX
+  - echo $CC
 
 script:
+  - ./autogen.sh
+  - ./configure
   - make test
 
 cache:
