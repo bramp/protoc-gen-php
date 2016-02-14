@@ -9,7 +9,8 @@ PHPUNIT=vendor/bin/phpunit
 
 all: test
 
-composer.lock: composer.json 
+composer.lock : composer.json
+	$(COMPOSER) update
 vendor: composer.lock
 	$(COMPOSER) install
 
