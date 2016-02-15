@@ -62,11 +62,7 @@ before_script:
 
 script:
   - ./autogen.sh && ./configure
-  - ls -l 
-  - ls -l tests
-  - ls -l tests/vendor
-  - ls -l tests/vendor/bin
-  - make -d test
+  - make test
 
 cache:
   apt: true
