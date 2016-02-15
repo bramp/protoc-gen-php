@@ -9,6 +9,23 @@ function stringToStream($str) {
 }
 
 
+/**
+ * Magic logger
+ * If you want to trace function calls just prefix them with L::. For example:
+ *   $fp = L::fopen("somefile");
+ *   L::fread($fp, 10);
+ * Will print out
+ *   fopen("somefile") = Resource id #97
+ *   fread(Resource id #97, 10) = "....."
+ */
+abstract class L {
+	public static function __callStatic($name, $arguments) {
+		echo "$name(" . implode(', ', $arguments). ") = ";
+		$ret = forward_static_call_array($name, $arguments);
+		echo print_r($ret, true) . "\n";
+		return $ret;
+	}
+}
 
 function print_bytes($bytes) {
 	$len = strlen($bytes);
@@ -82,8 +99,8 @@ class IsBinaryEqual extends PHPUnit_Framework_Constraint {
 
         throw new PHPUnit_Framework_ExpectationFailedException(
             $description . "\n" . 
-            	"Expected: " . self::toHexString($this->value) . "\n" .
-            	"  Actual: " . self::toHexString($other)
+                "Expected: len:" . strlen($this->value) . " " . self::toHexString($this->value) . "\n" .
+                "  Actual: len:" . strlen($this->value) . " " . self::toHexString($other)
         );
 	}
 
