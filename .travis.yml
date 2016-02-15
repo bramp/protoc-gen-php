@@ -33,13 +33,15 @@ addons:
 
 before_install:
   - ./install-protobuf.sh
+  # Various exports to use the protobuf shared library in the home dir
   - export LD_LIBRARY_PATH="$HOME/lib:$LD_LIBRARY_PATH"
   - export LIBRARY_PATH="$HOME/lib:$LIBRARY_PATH"
   - export PATH="$HOME/bin:$PATH"
   - export PKG_CONFIG_PATH="$HOME/lib/pkgconfig:$PKG_CONFIG_PATH"
   - export C_INCLUDE_PATH="$HOME/include:$C_INCLUDE_PATH"
   - export CPLUS_INCLUDE_PATH="$HOME/include:$CPLUS_INCLUDE_PATH"
-
+  # Enable ccache
+  - export PATH="/usr/lib/ccache:$PATH"
   - composer self-update
 
 install:
@@ -56,6 +58,7 @@ before_script:
   - autoconf --version || echo "no autoconf found"
   - php --version || echo "no php found"
   - protoc --version || echo "no protoc found"
+  - env
 
 script:
   - ./autogen.sh && ./configure
@@ -70,5 +73,6 @@ cache:
   ccache: true
   directories:
     - tests/vendor
+    - $HOME/.ccache
     - $HOME/.composer/cache
     - $HOME/.dist
