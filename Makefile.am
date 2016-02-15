@@ -1,4 +1,4 @@
-.PHONY = test bench
+.PHONY = test bench lint
 
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = src tests reference_app
@@ -23,13 +23,13 @@ test bench:
 	$(MAKE) -C tests $@
 
 # Useful for testing
-MYTESTS = addressbook2.proto addressbook3.proto conformance/conformance.proto 
-GENTESTS = $(MYTESTS:.proto=.proto.php)
-%.proto.php : %.proto protoc-gen-php
-	$(PROTOC) --php_out . --plugin=protoc-gen-php=./protoc-gen-php $<;
+TEST_PROTOS = reference_app/addressbook2.proto reference_app/addressbook3.proto reference_app/conformance.proto 
+TEST_PROTOS_PHP = $(TEST_PROTOS:.proto=.proto.php)
+%.proto.php : %.proto src/protoc-gen-php
+	$(PROTOC) --php_out . --plugin=protoc-gen-php=src/protoc-gen-php $<;
 
-mytest: $(GENTESTS)
-	php --syntax-check protocolbuffers.inc.php; \
+lint: protocolbuffers.inc.php $(TEST_PROTOS_PHP)
+	$(REALPHP) --syntax-check protocolbuffers.inc.php; \
 	for file in $(MYTESTS); do \
-		php --syntax-check $${file}.php; \
+		$(REALPHP) --syntax-check $${file}.php; \
 	done ;
