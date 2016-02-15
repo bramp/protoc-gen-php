@@ -8,6 +8,30 @@ function stringToStream($str) {
 	return $fp;
 }
 
+
+
+function print_bytes($bytes) {
+	$len = strlen($bytes);
+	for ($i = 0; $i < $len; $i++) {
+		echo sprintf("%02X ", ord($bytes[$i]));
+	}
+	echo "\n";
+}
+
+function print_varint_binary($bytes) {
+	$len = strlen($bytes);
+	for ($i = 0; $i < $len; $i++) {
+		$c = ord($bytes[$i]);
+		if ($c >= 0x80) {
+			echo sprintf("%07b ", $c & 0x7F);
+		} else {
+			echo sprintf("%07b ", $c);
+		}
+	}
+	echo "\n";
+}
+
+
 /**
  * Tests if the number represented by this string has an exact float representation.
  *
