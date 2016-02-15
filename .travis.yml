@@ -67,3 +67,4 @@ cache:
   directories:
     - tests/vendor
     - $HOME/.composer/cache
+    - $HOME/.dist
