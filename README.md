@@ -4,13 +4,16 @@ PHP Protocol Buffer Generator
 This is a plugin for Google's Protocol Buffer Generator, protoc. It generates PHP code from a .proto file.
 by Andrew Brampton ([bramp.net](http://bramp.net)) (c) 2010,2016
 
-[![Minimum PHP Version](https://img.shields.io/badge/php-%3E%3D%205.5-8892BF.svg?style=flat-square)](https://php.net/) [![Build Status](https://img.shields.io/travis/bramp/protoc-gen-php/master.svg?style=flat-square)](https://travis-ci.org/bramp/protoc-gen-php)
+[![Minimum PHP Version](https://img.shields.io/badge/php-%3E%3D%205.5-8892BF.svg)](https://php.net/)
+[![Minimum HHVM Version](https://img.shields.io/badge/hhvm-%3E%3D%203.6.6-orange.svg)](http://hhvm.com/)
+[![Build Status](https://img.shields.io/travis/bramp/protoc-gen-php/master.svg)](https://travis-ci.org/bramp/protoc-gen-php)
 
 Supports:
  * Proto2 and Proto3
  * All features (Messages, Enums, Oneof, Maps)
  * Designed to be quick
  * Passes all compliance tests
+ * PHP 5.5+ or [HHVM](http://hhvm.com/) 3.6.6+
 
 Future:
  * JSON encoding
