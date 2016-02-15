@@ -15,7 +15,7 @@ vendor: composer.lock
 	$(COMPOSER) install
 
 test: vendor *_test.php
-	$(PHP) $(PHPUNIT) --verbose *_test.php
+	$(PHP_OR_HHVM) $(PHPUNIT) --verbose *_test.php
 
 bench: vendor varints_benchmark.php
-	$(PHP) varints_benchmark.php
+	$(PHP_OR_HHVM) varints_benchmark.php

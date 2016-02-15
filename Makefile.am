@@ -29,7 +29,7 @@ TEST_PROTOS_PHP = $(TEST_PROTOS:.proto=.proto.php)
 	$(PROTOC) --php_out . --plugin=protoc-gen-php=src/protoc-gen-php $<;
 
 lint: protocolbuffers.inc.php $(TEST_PROTOS_PHP)
-	$(REALPHP) --syntax-check protocolbuffers.inc.php; \
+	$(PHP) --syntax-check protocolbuffers.inc.php; \
 	for file in $(MYTESTS); do \
-		$(REALPHP) --syntax-check $${file}.php; \
+		$(PHP) --syntax-check $${file}.php; \
 	done ;
