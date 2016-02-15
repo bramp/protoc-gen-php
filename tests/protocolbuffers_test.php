@@ -48,6 +48,16 @@ class VarintProtobufTest extends ProtobufTestCase {
 		"18446744073709551615" => "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01", // 2^64 - 1
 	);
 
+	function testReadBytes() {
+		$i = 0;
+		foreach ($this->tests as $enc) {
+			$i++;
+			$this->reset($enc);
+			$in = Protobuf::read_bytes($this->fp, strlen($enc));
+
+			$this->assertBinaryEqual($enc, $in, "Test $i failed to read_bytes(...)");
+		}
+	}
 
 	function testReadVarint() {
 		foreach ($this->tests as $i => $enc) {
@@ -62,6 +72,7 @@ class VarintProtobufTest extends ProtobufTestCase {
 			} else {
 				$a = Protobuf::read_signed_varint($this->fp);
 			}
+
 			$this->assertSame($i, $a, "Failed to read_varint($i)");
 		}
 	}

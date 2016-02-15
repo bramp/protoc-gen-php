@@ -130,6 +130,7 @@ abstract class ProtobufTestCase extends PHPUnit_Framework_TestCase {
     // Reset the resource to these bytes
     protected function reset($bytes = '') {
 		$this->assertTrue(ftruncate($this->fp, 0));
+		$this->assertTrue(rewind($this->fp));
 		$this->assertEquals(strlen($bytes), fwrite($this->fp, $bytes));
 		$this->assertTrue(rewind($this->fp));
     }
