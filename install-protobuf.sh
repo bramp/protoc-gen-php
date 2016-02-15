@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Small script to fetch the latest protobuf and installs it
 set -ex
 
