@@ -64,6 +64,9 @@ int main(int argc, char *argv[]) {
 	//all.set_optional_uint64(72057594037927936); // 80 80 80 80 80 80 80  80 01
 	//all.set_optional_uint64(72057594037927937); // 81 80 80 80 80 80 80 80 01
 
+	// Maps
+	//(*all.mutable_map_int32_int32())[1] = 2; // c2 03 04 08 01 10 02 // tag 56 {1: 1, 2: 2}
+	//(*all.mutable_map_int32_int32())[3] = 4; // c2 03 04 08 03 10 04 // tag 56 {1: 3, 2: 4}
 
 	fstream output("output", ios::out | ios::trunc | ios::binary);
     if (!all.SerializeToOstream(&output)) {
