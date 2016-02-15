@@ -1,21 +1,21 @@
+.PHONY = all test bench
+
 AUTOMAKE_OPTIONS = foreign
 
 MAKEFLAGS = --no-builtin-rules
 SUFFIXES:
 
-.PHONY = all test bench
-
 PHPUNIT=vendor/bin/phpunit
 
 all: test
 
-composer.lock : composer.json
+composer.lock: composer.json
 	$(COMPOSER) update
 vendor: composer.lock
 	$(COMPOSER) install
 
 test: vendor *_test.php
-	$(PHPUNIT) *_test.php
+	$(PHP) $(PHPUNIT) --verbose *_test.php
 
 bench: vendor varints_benchmark.php
 	$(PHP) varints_benchmark.php

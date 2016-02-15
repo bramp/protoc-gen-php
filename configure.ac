@@ -16,9 +16,14 @@ AS_IF([test "x${PROTOC}" == "x"],
     [AC_MSG_ERROR([Protobuf compiler "protoc" not found.])])
 
 # TODO Check PHP version
-AC_CHECK_PROG([PHP], [php], [php])
+AC_CHECK_PROGS([PHP], [hhvm php])
 AS_IF([test "x${PHP}" == "x"],
+    [AC_MSG_ERROR([Both PHP and HHVM not found. Atleast one must be available.])])
+
+AC_CHECK_PROG([PHP_REAL], [php], [php])
+AS_IF([test "x${PHP_REAL}" == "x"],
     [AC_MSG_ERROR([PHP not found.])])
+
 
 # The following is needed for dev/testing
 AC_CHECK_PROG([COMPOSER], [composer], [composer])
